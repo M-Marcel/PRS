@@ -128,3 +128,36 @@
     @apply font-sans;
   }
 }
+
+/* === BlessUP Design Tokens === */
+:root {
+  --blessup-green: #10B981;
+  --blessup-green-dark: #059669;
+  --blessup-green-light: #34D399;
+  --blessup-gold: #F59E0B;
+  --blessup-gold-dark: #D97706;
+  --blessup-purple: #8B5CF6;
+  --blessup-gradient-start: #10B981;
+  --blessup-gradient-end: #059669;
+}
+
+/* BlessUP gradient utility */
+.blessup-gradient {
+  background: linear-gradient(135deg, var(--blessup-gradient-start), var(--blessup-gradient-end));
+}
+
+.blessup-gradient-text {
+  background: linear-gradient(135deg, var(--blessup-green), var(--blessup-green-light));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Tier badge colors */
+.tier-elite {
+  --tier-color: var(--blessup-gold);
+}
+
+.tier-legend {
+  --tier-color: var(--blessup-purple);
+}
