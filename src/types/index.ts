@@ -105,6 +105,8 @@ export interface SprintStatus {
   readonly sessionsCompleted: number;
   readonly distinctDays: number;
   readonly isComplete: boolean;
+  readonly canDoSessionToday: boolean;
+  readonly markedOnChain: boolean;
   readonly sessions: ReadonlyArray<SprintSession>;
 }
 
