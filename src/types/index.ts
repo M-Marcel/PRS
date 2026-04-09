@@ -79,6 +79,7 @@ export interface PresaleStats {
   readonly presaleOpen: boolean;
   readonly presaleClosed: boolean;
   readonly tgeTriggered: boolean;
+  readonly paused: boolean;
 }
 
 // === Transaction Types ===
@@ -108,6 +109,54 @@ export interface SprintStatus {
   readonly canDoSessionToday: boolean;
   readonly markedOnChain: boolean;
   readonly sessions: ReadonlyArray<SprintSession>;
+}
+
+// === Vesting Types ===
+
+export interface VestingData {
+  readonly totalPurchased: bigint;
+  readonly lockedBalance: bigint;
+  readonly claimableBalance: bigint;
+  readonly vestedBalance: bigint;
+  readonly hasClaimed25: boolean;
+  readonly tgeTriggered: boolean;
+  readonly tgeAmount: bigint;
+  readonly linearVestTotal: bigint;
+  readonly dailyVestRate: bigint;
+  readonly currentDay: number;
+  readonly percentVested: number;
+  readonly totalClaimed: bigint;
+  readonly canClaimTGE: boolean;
+  readonly canClaimVested: boolean;
+  readonly isFullyVested: boolean;
+  readonly isLoading: boolean;
+  readonly error: Error | null;
+}
+
+// === Live Feed Types ===
+
+export interface RecentPurchase {
+  readonly buyer: string;
+  readonly amount: bigint;
+  readonly tier: number;
+  readonly txHash: string;
+  readonly timestamp: number;
+  readonly usdcPaid: bigint;
+}
+
+export interface EnhancedPresaleStats {
+  readonly presaleOpen: boolean;
+  readonly presaleClosed: boolean;
+  readonly tgeTriggered: boolean;
+  readonly totalTokensSold: string;
+  readonly totalTokensAvailable: string;
+  readonly remainingTokens: string;
+  readonly totalUSDCRaised: string;
+  readonly totalPurchases: number;
+  readonly elitePurchases: number;
+  readonly legendPurchases: number;
+  readonly averagePurchaseSize: string;
+  readonly timeRemaining: number | null;
 }
 
 // === Navigation Types ===

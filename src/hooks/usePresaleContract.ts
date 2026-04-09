@@ -56,6 +56,11 @@ export function usePresaleState(): {
         abi: presaleAbi,
         functionName: 'remainingTokens',
       },
+      {
+        address: presaleAddress,
+        abi: presaleAbi,
+        functionName: 'paused',
+      },
     ],
   });
 
@@ -67,6 +72,7 @@ export function usePresaleState(): {
         totalTokensSold: data[3].result as bigint,
         totalTokensAvailable: data[4].result as bigint,
         remainingTokens: data[5].result as bigint,
+        paused: data[6].result as boolean,
       }
     : undefined;
 

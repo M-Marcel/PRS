@@ -36,6 +36,17 @@ export const truncateAddress = (address: string): string => {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
 };
 
+// Days since TGE (DEX launch date), clamped to [0, 90]
+export const daysSinceTGE = (): number => {
+  const tgeDateStr = process.env.NEXT_PUBLIC_DEX_LAUNCH_DATE;
+  if (!tgeDateStr) return 0;
+  const tgeDate = new Date(tgeDateStr);
+  if (isNaN(tgeDate.getTime())) return 0;
+  const diff = Date.now() - tgeDate.getTime();
+  if (diff < 0) return 0;
+  return Math.min(90, Math.floor(diff / (1000 * 60 * 60 * 24)));
+};
+
 // Days remaining from now to target date
 export const daysUntil = (target: Date): number => {
   const diff = target.getTime() - Date.now();

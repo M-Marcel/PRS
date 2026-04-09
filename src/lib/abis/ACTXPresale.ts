@@ -25,6 +25,9 @@ export const PRESALE_ABI = [
   'function getTotalPurchased(address) view returns (uint256)',
   'function hasClaimed25(address) view returns (bool)',
 
+  // Pausable
+  'function paused() view returns (bool)',
+
   // Pricing
   'function elitePrice() view returns (uint256)',   // USDC amount per token (6 decimals)
   'function legendPrice() view returns (uint256)',
