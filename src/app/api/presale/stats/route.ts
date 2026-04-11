@@ -7,15 +7,18 @@ import { prisma } from '@/lib/prisma';
 
 const chain = process.env.NEXT_PUBLIC_CHAIN === 'mainnet' ? base : baseSepolia;
 
-const client = createPublicClient({
-  chain,
-  transport: http(process.env.NEXT_PUBLIC_RPC_URL),
-});
+function getClient() {
+  const rpcUrl = process.env.NEXT_PUBLIC_RPC_URL;
+  if (!rpcUrl) throw new Error('NEXT_PUBLIC_RPC_URL is not configured');
+  return createPublicClient({
+    chain,
+    transport: http(rpcUrl),
+  });
+}
 
 const presaleAbi = parseAbi(PRESALE_ABI);
 
 interface DBStats {
-  totalUSDCRaised: string;
   totalPurchases: number;
   elitePurchases: number;
   legendPurchases: number;
@@ -23,8 +26,6 @@ interface DBStats {
 }
 
 async function getDBStats(): Promise<DBStats> {
-  // Use groupBy + aggregate so computation stays in the database —
-  // never loads unbounded rows into Node memory.
   const [tierGroups, totals] = await Promise.all([
     prisma.presaleEvent.groupBy({
       by: ['tier'],
@@ -33,17 +34,13 @@ async function getDBStats(): Promise<DBStats> {
     }),
     prisma.presaleEvent.findMany({
       where: { eventType: 'purchase' },
-      select: { usdcAmount: true, tokenAmount: true },
-      // DB-side: we still need to sum strings-as-bigints in JS,
-      // but limit the selected columns to minimise transfer.
+      select: { tokenAmount: true },
     }),
   ]);
 
-  let totalUsdcRaised = 0n;
   let totalTokensBought = 0n;
 
   for (const row of totals) {
-    if (row.usdcAmount) totalUsdcRaised += BigInt(row.usdcAmount);
     if (row.tokenAmount) totalTokensBought += BigInt(row.tokenAmount);
   }
 
@@ -62,7 +59,6 @@ async function getDBStats(): Promise<DBStats> {
     : '0';
 
   return {
-    totalUSDCRaised: totalUsdcRaised.toString(),
     totalPurchases,
     elitePurchases,
     legendPurchases,
@@ -80,56 +76,43 @@ function computeTimeRemaining(presaleOpen: boolean): number | null {
   return Math.max(0, remaining);
 }
 
-// GET: Aggregated presale metrics from on-chain contract + database.
+// GET: Aggregated presale metrics from on-chain getPresaleStats() + database.
 // Response is cached for 30s with stale-while-revalidate.
 export async function GET() {
   try {
     const presaleAddress = getAddresses().presale;
 
-    const [results, dbStats] = await Promise.all([
-      client.multicall({
-        contracts: [
-          { address: presaleAddress, abi: presaleAbi, functionName: 'presaleOpen' },
-          { address: presaleAddress, abi: presaleAbi, functionName: 'presaleClosed' },
-          { address: presaleAddress, abi: presaleAbi, functionName: 'tgeTriggered' },
-          { address: presaleAddress, abi: presaleAbi, functionName: 'totalTokensSold' },
-          { address: presaleAddress, abi: presaleAbi, functionName: 'totalTokensAvailable' },
-          { address: presaleAddress, abi: presaleAbi, functionName: 'remainingTokens' },
-        ],
+    // Single getPresaleStats() call replaces 6 separate reads
+    const [statsResult, dbStats] = await Promise.all([
+      getClient().readContract({
+        address: presaleAddress,
+        abi: presaleAbi,
+        functionName: 'getPresaleStats',
       }),
       getDBStats(),
     ]);
 
-    // Check all on-chain calls succeeded
-    const allSuccess = results.every((r) => r.status === 'success');
-    if (!allSuccess) {
-      return NextResponse.json(
-        { success: false, error: 'Failed to read presale contract state' },
-        { status: 502 },
-      );
-    }
+    // getPresaleStats returns: (poolTotal, poolRemaining, totalUsdcRaised,
+    //   totalParticipants, presaleOpen, tgeTriggered, tgeTimestamp, version)
+    const stats = statsResult as readonly [bigint, bigint, bigint, bigint, boolean, boolean, bigint, bigint];
 
-    const toBool = (v: unknown): boolean => {
-      if (typeof v !== 'boolean') throw new Error(`Expected boolean, got ${typeof v}`);
-      return v;
-    };
-    const toBigIntStr = (v: unknown): string => {
-      if (typeof v !== 'bigint') throw new Error(`Expected bigint, got ${typeof v}`);
-      return v.toString();
-    };
-
-    const presaleOpen = toBool(results[0].result);
+    const poolTotal = stats[0];
+    const poolRemaining = stats[1];
+    const totalUsdcRaised = stats[2];
+    const totalParticipants = stats[3];
+    const presaleOpen = stats[4];
+    const tgeTriggered = stats[5];
+    const totalTokensSold = poolTotal - poolRemaining;
 
     const data = {
-      // On-chain data
       presaleOpen,
-      presaleClosed: toBool(results[1].result),
-      tgeTriggered: toBool(results[2].result),
-      totalTokensSold: toBigIntStr(results[3].result),
-      totalTokensAvailable: toBigIntStr(results[4].result),
-      remainingTokens: toBigIntStr(results[5].result),
-      // DB-derived data
-      totalUSDCRaised: dbStats.totalUSDCRaised,
+      presaleClosed: !presaleOpen,
+      tgeTriggered,
+      poolTotal: poolTotal.toString(),
+      poolRemaining: poolRemaining.toString(),
+      totalTokensSold: totalTokensSold.toString(),
+      totalUsdcRaised: totalUsdcRaised.toString(),
+      totalParticipants: Number(totalParticipants),
       totalPurchases: dbStats.totalPurchases,
       elitePurchases: dbStats.elitePurchases,
       legendPurchases: dbStats.legendPurchases,

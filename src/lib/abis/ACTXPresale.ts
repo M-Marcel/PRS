@@ -1,63 +1,81 @@
-// NOTE: This is the EXPECTED interface based on Eddy's spec.
-// Replace with actual ABI after deployment.
+// Actual ACTXPresale.sol ABI — deployed on Base Sepolia
+// Contract: 0xA5c93F78ee3eD5395d2fa92e8ce8f856F292fc9e
 
 export const PRESALE_ABI = [
-  // === READ FUNCTIONS ===
-
-  // Presale state
+  // === View Functions ===
+  'function isQualified(address wallet) view returns (bool)',
+  'function getWalletTier(address wallet) view returns (uint8)',
+  'function getPurchase(address wallet) view returns (uint256 totalTokens, uint256 totalSpentUsdc, uint256 claimed)',
+  'function getClaimable(address wallet) view returns (uint256)',
+  'function getLockedBalance(address wallet) view returns (uint256)',
+  'function getTierConfig(uint8 tier) view returns (uint256 priceUsdc, uint256 maxSpendUsdc)',
+  'function getPresaleStats() view returns (uint256 poolTotal, uint256 poolRemaining, uint256 totalUsdcRaised, uint256 totalParticipants, bool presaleOpen, bool tgeTriggered, uint256 tgeTimestamp, uint256 version)',
+  'function poolRemaining() view returns (uint256)',
+  'function poolTotal() view returns (uint256)',
+  'function totalUsdcRaised() view returns (uint256)',
+  'function totalParticipants() view returns (uint256)',
   'function presaleOpen() view returns (bool)',
-  'function presaleClosed() view returns (bool)',
   'function tgeTriggered() view returns (bool)',
-  'function totalTokensSold() view returns (uint256)',
-  'function totalTokensAvailable() view returns (uint256)',
-  'function remainingTokens() view returns (uint256)',
-
-  // Founder/tier info
-  'function founderTier(address) view returns (uint8)',  // 0=None, 1=Elite, 2=Legend
-  'function hasCompletedSprint(address) view returns (bool)',
-  'function tokensPurchased(address) view returns (uint256)',
-  'function spendCapRemaining(address) view returns (uint256)',
-
-  // Vesting
-  'function getLockedBalance(address) view returns (uint256)',
-  'function getClaimableBalance(address) view returns (uint256)',
-  'function getVestedBalance(address) view returns (uint256)',
-  'function getTotalPurchased(address) view returns (uint256)',
-  'function hasClaimed25(address) view returns (bool)',
-
-  // Pausable
+  'function tgeTimestamp() view returns (uint256)',
+  'function actxToken() view returns (address)',
+  'function usdc() view returns (address)',
+  'function usdcRecipient() view returns (address)',
+  'function version() view returns (uint256)',
+  'function maxParticipants() pure returns (uint256)',
+  'function maxTokensPerFounder() pure returns (uint256)',
   'function paused() view returns (bool)',
 
-  // Pricing
-  'function elitePrice() view returns (uint256)',   // USDC amount per token (6 decimals)
-  'function legendPrice() view returns (uint256)',
-  'function perWalletCap() view returns (uint256)', // 10,000 ACTX in 18 decimals
-
-  // === WRITE FUNCTIONS ===
-
-  // Purchase (requires USDC approval first)
-  'function purchase(uint256 tokenAmount) external',
-
-  // Claim vested tokens
-  'function claimTGE() external',           // One-shot 25% claim
-  'function claimVested() external',        // Claim available linear vest
-
-  // Admin
-  'function registerFounder(address wallet, uint8 tier) external',
-  'function markSprintComplete(address wallet) external',
+  // === Write Functions ===
+  'function purchase(uint256 usdcAmount) external',
+  'function claim() external',
+  'function qualifyWallet(address wallet) external',
+  'function qualifyWallets(address[] wallets) external',
+  'function disqualifyWallet(address wallet) external',
+  'function setWalletTier(address wallet, uint8 tier) external',
+  'function setWalletTiers(address[] wallets, uint8[] tiers) external',
+  'function updateTierConfig(uint8 tier, uint256 priceUsdc, uint256 maxSpendUsdc) external',
+  'function fundPool(uint256 amount) external',
   'function openPresale() external',
   'function closePresale() external',
   'function triggerTGE() external',
+  'function setUsdcRecipient(address newRecipient) external',
+  'function withdrawUnsoldTokens(address to) external',
+  'function rescueETH(address to) external',
+  'function rescueToken(address token, address to, uint256 amount) external',
   'function pause() external',
   'function unpause() external',
 
-  // === EVENTS ===
-  'event Purchase(address indexed buyer, uint256 tokenAmount, uint256 usdcPaid, uint8 tier)',
+  // === Events ===
+  'event WalletQualified(address indexed wallet)',
+  'event WalletDisqualified(address indexed wallet)',
+  'event WalletTierSet(address indexed wallet, uint8 tier)',
+  'event TokensPurchased(address indexed buyer, uint8 tier, uint256 usdcAmount, uint256 tokenAmount, uint256 poolRemaining)',
   'event TGETriggered(uint256 timestamp)',
-  'event TGEClaimed(address indexed wallet, uint256 amount)',
-  'event VestingClaimed(address indexed wallet, uint256 amount)',
+  'event TokensClaimed(address indexed wallet, uint256 amount, uint256 totalClaimed)',
   'event PresaleOpened(uint256 timestamp)',
   'event PresaleClosed(uint256 timestamp)',
-  'event FounderRegistered(address indexed wallet, uint8 tier)',
-  'event SprintCompleted(address indexed wallet)',
+  'event PoolFunded(address indexed funder, uint256 amount, uint256 newPoolTotal)',
+  'event TierConfigUpdated(uint8 indexed tier, uint256 priceUsdc, uint256 maxSpendUsdc)',
+  'event UsdcRecipientUpdated(address indexed oldRecipient, address indexed newRecipient)',
+  'event UnsoldTokensWithdrawn(address indexed to, uint256 amount)',
+  'event ContractUpgraded(address indexed newImplementation, uint256 version)',
+
+  // === Errors ===
+  'error NotQualified()',
+  'error NoTierAssigned()',
+  'error PresaleNotOpen()',
+  'error PresaleAlreadyOpen()',
+  'error PoolExhausted()',
+  'error ExceedsMaxSpend(uint256 requested, uint256 remaining)',
+  'error ExceedsTokenCap(uint256 requested, uint256 remaining)',
+  'error MaxParticipantsReached()',
+  'error TGEAlreadyTriggered()',
+  'error TGENotTriggered()',
+  'error NothingToClaim()',
+  'error ZeroAddress()',
+  'error ZeroAmount()',
+  'error InvalidTier()',
+  'error PresaleStillOpen()',
+  'error ETHTransferFailed()',
+  'error CannotRescueACTX()',
 ] as const;

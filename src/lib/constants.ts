@@ -25,6 +25,9 @@ export const PRESALE = {
   PRE_LAUNCH_BUFFER_HOURS: 48,
   UPGRADE_CUTOFF_HOURS: 24,                      // Before presale opens
 
+  // Participants
+  MAX_PARTICIPANTS: 300,                          // Per Final Blueprint
+
   // Genesis Sprint
   REQUIRED_RENEW_SESSIONS: 3,
   REQUIRED_DISTINCT_DAYS: 3,

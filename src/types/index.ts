@@ -60,11 +60,14 @@ export interface FounderStatus {
   readonly isElite: boolean;
   readonly isLegend: boolean;
   readonly tierPrice: bigint;
-  readonly sprintCompleted: boolean;
+  readonly maxSpendUsdc: bigint;
+  readonly isQualified: boolean;
   readonly hasPurchased: boolean;
   readonly canPurchase: boolean;
   readonly tokensPurchased: bigint;
-  readonly spendCapRemaining: bigint;
+  readonly totalSpentUsdc: bigint;
+  readonly usdcCapRemaining: bigint;
+  readonly tokenCapRemaining: bigint;
   readonly lockedBalance: bigint;
   readonly claimableBalance: bigint;
   readonly isLoading: boolean;
@@ -73,12 +76,16 @@ export interface FounderStatus {
 // === Presale Types ===
 
 export interface PresaleStats {
+  readonly poolTotal: bigint;
+  readonly poolRemaining: bigint;
   readonly totalTokensSold: bigint;
-  readonly totalTokensAvailable: bigint;
-  readonly remainingTokens: bigint;
+  readonly totalUsdcRaised: bigint;
+  readonly totalParticipants: bigint;
   readonly presaleOpen: boolean;
   readonly presaleClosed: boolean;
   readonly tgeTriggered: boolean;
+  readonly tgeTimestamp: bigint;
+  readonly version: bigint;
   readonly paused: boolean;
 }
 
@@ -115,19 +122,19 @@ export interface SprintStatus {
 
 export interface VestingData {
   readonly totalPurchased: bigint;
+  readonly totalSpentUsdc: bigint;
+  readonly totalClaimed: bigint;
   readonly lockedBalance: bigint;
   readonly claimableBalance: bigint;
-  readonly vestedBalance: bigint;
   readonly hasClaimed25: boolean;
   readonly tgeTriggered: boolean;
+  readonly tgeTimestamp: bigint;
   readonly tgeAmount: bigint;
   readonly linearVestTotal: bigint;
   readonly dailyVestRate: bigint;
   readonly currentDay: number;
   readonly percentVested: number;
-  readonly totalClaimed: bigint;
-  readonly canClaimTGE: boolean;
-  readonly canClaimVested: boolean;
+  readonly canClaim: boolean;
   readonly isFullyVested: boolean;
   readonly isLoading: boolean;
   readonly error: Error | null;
@@ -148,10 +155,11 @@ export interface EnhancedPresaleStats {
   readonly presaleOpen: boolean;
   readonly presaleClosed: boolean;
   readonly tgeTriggered: boolean;
+  readonly poolTotal: string;
+  readonly poolRemaining: string;
   readonly totalTokensSold: string;
-  readonly totalTokensAvailable: string;
-  readonly remainingTokens: string;
-  readonly totalUSDCRaised: string;
+  readonly totalUsdcRaised: string;
+  readonly totalParticipants: number;
   readonly totalPurchases: number;
   readonly elitePurchases: number;
   readonly legendPurchases: number;

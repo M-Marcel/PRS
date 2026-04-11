@@ -6,75 +6,77 @@ import { formatACTX } from '@/lib/formatting';
 import { Card, CardContent } from '@/components/ui/card';
 import { Loader2, CheckCircle2, Gift } from 'lucide-react';
 
-interface ClaimTGEButtonProps {
-  readonly tgeAmount: bigint;
-  readonly canClaimTGE: boolean;
-  readonly hasClaimed25: boolean;
+interface ClaimButtonProps {
+  readonly claimableBalance: bigint;
+  readonly canClaim: boolean;
   readonly tgeTriggered: boolean;
-  readonly isClaimingTGE: boolean;
-  readonly isTGEConfirming: boolean;
-  readonly isTGEConfirmed: boolean;
-  readonly tgeHash: string | null;
+  readonly isClaiming: boolean;
+  readonly isConfirming: boolean;
+  readonly isConfirmed: boolean;
+  readonly claimHash: string | null;
   readonly onClaim: () => void;
 }
 
 /**
- * One-shot 25% TGE claim button.
- * Parent owns the write hook and passes state down.
+ * Unified claim button for both TGE (25%) and linear vesting claims.
+ * The contract uses a single claim() function that handles both.
  */
-export function ClaimTGEButton({
-  tgeAmount,
-  canClaimTGE,
-  hasClaimed25,
+export function ClaimButton({
+  claimableBalance,
+  canClaim,
   tgeTriggered,
-  isClaimingTGE,
-  isTGEConfirming,
-  isTGEConfirmed,
-  tgeHash,
+  isClaiming,
+  isConfirming,
+  isConfirmed,
+  claimHash,
   onClaim,
-}: ClaimTGEButtonProps) {
-  const isProcessing = isClaimingTGE || isTGEConfirming;
+}: ClaimButtonProps) {
+  const isProcessing = isClaiming || isConfirming;
 
   const statusText = !tgeTriggered
     ? 'TGE not yet triggered'
-    : hasClaimed25 || isTGEConfirmed
-      ? 'TGE tokens claimed'
-      : `Claim ${formatACTX(tgeAmount, 0)} ACTX`;
+    : claimableBalance > 0n
+      ? `Claim ${formatACTX(claimableBalance, 0)} ACTX`
+      : 'No tokens to claim';
 
   return (
     <Card>
       <CardContent className="space-y-3 py-4">
         <div className="flex items-center gap-2">
           <Gift className="h-4 w-4 text-[var(--blessup-gold)]" />
-          <p className="text-sm font-medium">TGE Unlock (25%)</p>
+          <p className="text-sm font-medium">Claim Tokens</p>
         </div>
 
         <p className="text-xs text-muted-foreground">
-          {formatACTX(tgeAmount, 0)} ACTX available at TGE
+          {claimableBalance > 0n
+            ? `${formatACTX(claimableBalance, 0)} ACTX available to claim`
+            : tgeTriggered
+              ? 'No tokens available to claim yet'
+              : 'TGE has not been triggered yet'}
         </p>
 
-        {hasClaimed25 || isTGEConfirmed ? (
+        {isConfirmed ? (
           <div className="flex items-center gap-2 text-sm text-[var(--blessup-green)]">
             <CheckCircle2 className="h-4 w-4" />
-            <span>TGE tokens claimed</span>
+            <span>Tokens claimed successfully</span>
           </div>
         ) : (
           <Button
             onClick={onClaim}
-            disabled={!canClaimTGE || isProcessing}
+            disabled={!canClaim || isProcessing}
             className="w-full bg-[var(--blessup-green)] text-white hover:bg-[var(--blessup-green-dark)]"
           >
             {isProcessing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {isClaimingTGE
+            {isClaiming
               ? 'Confirm in wallet...'
-              : isTGEConfirming
+              : isConfirming
                 ? 'Confirming...'
                 : statusText}
           </Button>
         )}
 
-        {tgeHash && !isTGEConfirmed && (
-          <TransactionStatus hash={tgeHash} label="TGE Claim" />
+        {claimHash && !isConfirmed && (
+          <TransactionStatus hash={claimHash} label="Claim" />
         )}
       </CardContent>
     </Card>

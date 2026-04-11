@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useMemo } from 'react';
-import { useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
+import { useWriteContract, useWaitForTransactionReceipt, useConfig } from 'wagmi';
+import { waitForTransactionReceipt } from 'wagmi/actions';
 import { useQueryClient } from '@tanstack/react-query';
 import { type Address, parseAbi } from 'viem';
 import { PRESALE_ABI } from '@/lib/abis/ACTXPresale';
@@ -18,11 +19,13 @@ interface AdminWriteOp {
 }
 
 interface UseAdminWriteReturn {
-  readonly registerFounder: (wallet: Address, tier: number) => void;
-  readonly register: AdminWriteOp;
+  readonly qualifyWallet: (wallet: Address) => void;
+  readonly qualify: AdminWriteOp;
 
-  readonly markSprint: (wallet: Address) => void;
-  readonly sprint: AdminWriteOp;
+  readonly setWalletTier: (wallet: Address, tier: number) => void;
+  readonly tierOp: AdminWriteOp;
+
+  readonly qualifyAndSetTier: (wallet: Address, tier: number) => Promise<void>;
 
   readonly openPresale: () => void;
   readonly open: AdminWriteOp;
@@ -53,20 +56,23 @@ function parseAdminError(error: unknown): string {
   if (lower.includes('ownableunauthorized') || lower.includes('only owner') || lower.includes('accesscontrol')) {
     return 'Your wallet does not have admin permissions on this contract';
   }
-  if (lower.includes('alreadyopen') || lower.includes('already open')) {
+  if (lower.includes('presalealreadyopen')) {
     return 'Presale is already open';
   }
-  if (lower.includes('alreadyclosed') || lower.includes('already closed')) {
-    return 'Presale is already closed';
+  if (lower.includes('presalestillopen')) {
+    return 'Cannot perform this action while presale is still open';
   }
-  if (lower.includes('tgealready') || lower.includes('tge already')) {
+  if (lower.includes('tgealreadytriggered')) {
     return 'TGE has already been triggered';
+  }
+  if (lower.includes('invalidtier')) {
+    return 'Invalid tier specified';
+  }
+  if (lower.includes('zeroaddress')) {
+    return 'Cannot use zero address';
   }
   if (lower.includes('paused')) {
     return 'Contract is currently paused';
-  }
-  if (lower.includes('alreadyregistered') || lower.includes('already registered')) {
-    return 'Founder is already registered on-chain';
   }
 
   return msg;
@@ -82,7 +88,6 @@ function useAdminOp(queryClient: ReturnType<typeof useQueryClient>) {
     query: { enabled: Boolean(write.data) },
   });
 
-  // Invalidate caches when THIS specific operation confirms
   useEffect(() => {
     if (receipt.isSuccess) {
       queryClient.invalidateQueries({ queryKey: ['readContracts'] });
@@ -92,6 +97,7 @@ function useAdminOp(queryClient: ReturnType<typeof useQueryClient>) {
 
   return {
     writeContract: write.writeContract,
+    writeContractAsync: write.writeContractAsync,
     hash: write.data ?? null,
     isPending: write.isPending,
     isConfirming: receipt.isLoading,
@@ -104,36 +110,57 @@ function useAdminOp(queryClient: ReturnType<typeof useQueryClient>) {
 /**
  * Write hook for all admin contract functions.
  *
- * Each operation has independent state tracking and cache invalidation
- * so multiple actions don't interfere with each other's TX lifecycle.
+ * Key changes from old contract:
+ * - registerFounder(addr, tier) → qualifyWallet(addr) + setWalletTier(addr, tier)
+ * - markSprintComplete(addr) → qualifyWallet(addr)
+ * - Batch: qualifyWallets(addrs) + setWalletTiers(addrs, tiers)
  */
 export function useAdminWrite(): UseAdminWriteReturn {
   const queryClient = useQueryClient();
+  const config = useConfig();
   const { presale } = getAddresses();
 
-  const registerOp = useAdminOp(queryClient);
-  const sprintOp = useAdminOp(queryClient);
+  const qualifyOp = useAdminOp(queryClient);
+  const tierOp = useAdminOp(queryClient);
   const openOp = useAdminOp(queryClient);
   const closeOp = useAdminOp(queryClient);
   const tgeOp = useAdminOp(queryClient);
   const pauseOperation = useAdminOp(queryClient);
   const unpauseOperation = useAdminOp(queryClient);
 
-  const registerFounder = (wallet: Address, tier: number) => {
-    registerOp.writeContract({
+  const qualifyWallet = (wallet: Address) => {
+    qualifyOp.writeContract({
       address: presale,
       abi: presaleAbi,
-      functionName: 'registerFounder',
+      functionName: 'qualifyWallet',
+      args: [wallet],
+    });
+  };
+
+  const setWalletTier = (wallet: Address, tier: number) => {
+    tierOp.writeContract({
+      address: presale,
+      abi: presaleAbi,
+      functionName: 'setWalletTier',
       args: [wallet, tier],
     });
   };
 
-  const markSprint = (wallet: Address) => {
-    sprintOp.writeContract({
+  // Two-step sequential: qualify then set tier (waits for on-chain confirmation)
+  const qualifyAndSetTier = async (wallet: Address, tier: number) => {
+    const qualifyHash = await qualifyOp.writeContractAsync({
       address: presale,
       abi: presaleAbi,
-      functionName: 'markSprintComplete',
+      functionName: 'qualifyWallet',
       args: [wallet],
+    });
+    // Wait for on-chain confirmation before sending the second transaction
+    await waitForTransactionReceipt(config, { hash: qualifyHash });
+    tierOp.writeContract({
+      address: presale,
+      abi: presaleAbi,
+      functionName: 'setWalletTier',
+      args: [wallet, tier],
     });
   };
 
@@ -166,18 +193,18 @@ export function useAdminWrite(): UseAdminWriteReturn {
 
   const error = useMemo(() => {
     const raw =
-      registerOp.error ?? sprintOp.error ?? openOp.error ??
+      qualifyOp.error ?? tierOp.error ?? openOp.error ??
       closeOp.error ?? tgeOp.error ?? pauseOperation.error ?? unpauseOperation.error;
     if (!raw) return null;
     return parseAdminError(raw);
   }, [
-    registerOp.error, sprintOp.error, openOp.error,
+    qualifyOp.error, tierOp.error, openOp.error,
     closeOp.error, tgeOp.error, pauseOperation.error, unpauseOperation.error,
   ]);
 
   const reset = () => {
-    registerOp.reset();
-    sprintOp.reset();
+    qualifyOp.reset();
+    tierOp.reset();
     openOp.reset();
     closeOp.reset();
     tgeOp.reset();
@@ -186,10 +213,11 @@ export function useAdminWrite(): UseAdminWriteReturn {
   };
 
   return {
-    registerFounder,
-    register: toOp(registerOp),
-    markSprint,
-    sprint: toOp(sprintOp),
+    qualifyWallet,
+    qualify: toOp(qualifyOp),
+    setWalletTier,
+    tierOp: toOp(tierOp),
+    qualifyAndSetTier,
     openPresale,
     open: toOp(openOp),
     closePresale,

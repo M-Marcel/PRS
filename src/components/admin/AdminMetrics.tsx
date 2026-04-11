@@ -83,7 +83,7 @@ export function AdminMetrics() {
         />
         <MetricCard
           label="Tokens Remaining"
-          value={presale ? formatACTX(presale.remainingTokens, 0) : '--'}
+          value={presale ? formatACTX(presale.poolRemaining, 0) : '--'}
         />
         <MetricCard
           label="Total Founders"

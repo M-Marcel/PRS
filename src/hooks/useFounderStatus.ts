@@ -1,8 +1,8 @@
 'use client';
 
 import { useAccount, useChainId } from 'wagmi';
-import { useFounderContractData, usePresaleFlag } from './usePresaleContract';
-import { FounderTier, PRESALE } from '@/lib/constants';
+import { useFounderContractData, usePresaleFlag, usePresalePricing } from './usePresaleContract';
+import { FounderTier } from '@/lib/constants';
 import { TARGET_CHAIN_ID } from '@/lib/chains';
 import type { FounderStatus } from '@/types';
 
@@ -16,8 +16,8 @@ const TIER_NAMES: Record<number, string> = {
  * Core hook that every protected page depends on.
  * Reads all relevant on-chain state for the connected wallet.
  *
- * The whitelist is entirely on-chain — founderTier(address) is the source of truth.
- * No API calls or database lookups for identity.
+ * The whitelist is entirely on-chain — getWalletTier(address) is the source of truth.
+ * Qualification gate uses isQualified(address) (replaces hasCompletedSprint).
  */
 export function useFounderStatus(): FounderStatus {
   const { address, isConnected } = useAccount();
@@ -26,19 +26,25 @@ export function useFounderStatus(): FounderStatus {
 
   const {
     tier,
-    sprintCompleted,
+    isQualified,
     tokensPurchased,
-    spendCapRemaining,
+    totalSpentUsdc,
     lockedBalance,
     claimableBalance,
     isLoading: isContractLoading,
   } = useFounderContractData(address);
 
   const { data: presaleOpen, isLoading: isPresaleLoading } = usePresaleFlag('presaleOpen');
+  const { elitePrice, legendPrice, eliteMaxSpend, legendMaxSpend, maxTokensPerFounder, isLoading: isPricingLoading } = usePresalePricing();
 
   const isElite = tier === FounderTier.ELITE;
   const isLegend = tier === FounderTier.LEGEND;
   const isWhitelisted = tier > FounderTier.NONE;
+
+  const tierPrice = isElite ? elitePrice : legendPrice;
+  const maxSpendUsdc = isElite ? eliteMaxSpend : legendMaxSpend;
+  const usdcCapRemaining = maxSpendUsdc > totalSpentUsdc ? maxSpendUsdc - totalSpentUsdc : 0n;
+  const tokenCapRemaining = maxTokensPerFounder > tokensPurchased ? maxTokensPerFounder - tokensPurchased : 0n;
 
   return {
     isConnected,
@@ -48,14 +54,17 @@ export function useFounderStatus(): FounderStatus {
     isWhitelisted,
     isElite,
     isLegend,
-    tierPrice: isElite ? PRESALE.ELITE_PRICE : PRESALE.LEGEND_PRICE,
-    sprintCompleted,
+    tierPrice,
+    maxSpendUsdc,
+    isQualified,
     hasPurchased: tokensPurchased > 0n,
-    canPurchase: isWhitelisted && sprintCompleted && (presaleOpen ?? false) && spendCapRemaining > 0n,
+    canPurchase: isWhitelisted && isQualified && (presaleOpen ?? false) && usdcCapRemaining > 0n && tokenCapRemaining > 0n,
     tokensPurchased,
-    spendCapRemaining,
+    totalSpentUsdc,
+    usdcCapRemaining,
+    tokenCapRemaining,
     lockedBalance,
     claimableBalance,
-    isLoading: isContractLoading || isPresaleLoading,
+    isLoading: isContractLoading || isPresaleLoading || isPricingLoading,
   };
 }

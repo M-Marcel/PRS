@@ -65,9 +65,9 @@ export function PoolTracker({ className = '' }: PoolTrackerProps) {
     );
   }
 
-  const { totalTokensSold, totalTokensAvailable, remainingTokens } = data;
-  const remainingPercent = poolPercentage(remainingTokens, totalTokensAvailable);
-  const soldPercent = totalTokensAvailable > 0n ? 100 - remainingPercent : 0;
+  const { totalTokensSold, poolTotal, poolRemaining } = data;
+  const remainingPercent = poolPercentage(poolRemaining, poolTotal);
+  const soldPercent = poolTotal > 0n ? 100 - remainingPercent : 0;
   const colorClass = getPoolColor(remainingPercent);
 
   return (
@@ -75,7 +75,7 @@ export function PoolTracker({ className = '' }: PoolTrackerProps) {
       <div className="flex items-center justify-between text-sm">
         <span className="text-muted-foreground">Pool Progress</span>
         <span className="font-medium">
-          {formatACTX(remainingTokens, 0)} of {formatACTX(totalTokensAvailable, 0)} ACTX remaining
+          {formatACTX(poolRemaining, 0)} of {formatACTX(poolTotal, 0)} ACTX remaining
         </span>
       </div>
       <div className="relative">

@@ -64,27 +64,37 @@ export function PurchaseForm() {
     return `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   }, [parsedTokenAmount]);
 
-  // Max tokens the user can purchase (minimum of cap remaining and what they can afford)
+  // Max tokens the user can purchase (minimum of token cap, USDC cap, and what they can afford)
   const maxTokens = useMemo(() => {
     if (founder.tierPrice === 0n) return 0n;
     // Max from USDC balance: (balance * 10^18) / pricePerToken
     const affordableTokens = (usdcBalance * parseUnits('1', 18)) / founder.tierPrice;
-    const capRemaining = founder.spendCapRemaining;
-    return affordableTokens < capRemaining ? affordableTokens : capRemaining;
-  }, [usdcBalance, founder.tierPrice, founder.spendCapRemaining]);
+    // Max from USDC spend cap: (usdcCapRemaining * 10^18) / pricePerToken
+    const usdcCapTokens = founder.tierPrice > 0n
+      ? (founder.usdcCapRemaining * parseUnits('1', 18)) / founder.tierPrice
+      : 0n;
+    // Take minimum of all caps
+    let max = founder.tokenCapRemaining;
+    if (usdcCapTokens < max) max = usdcCapTokens;
+    if (affordableTokens < max) max = affordableTokens;
+    return max;
+  }, [usdcBalance, founder.tierPrice, founder.usdcCapRemaining, founder.tokenCapRemaining]);
 
   // Validation
   const validation = useMemo(() => {
     if (parsedTokenAmount === 0n) return null; // No input yet
 
-    if (parsedTokenAmount > founder.spendCapRemaining) {
-      return `Exceeds your remaining cap of ${formatACTX(founder.spendCapRemaining, 0)} ACTX`;
+    if (parsedTokenAmount > founder.tokenCapRemaining) {
+      return `Exceeds your remaining token cap of ${formatACTX(founder.tokenCapRemaining, 0)} ACTX`;
+    }
+    if (usdcCost > founder.usdcCapRemaining) {
+      return `Exceeds your remaining USDC spend cap of ${formatUSDC(founder.usdcCapRemaining)}`;
     }
     if (usdcCost > usdcBalance) {
       return `Insufficient USDC (need ${formatUSDC(usdcCost)}, have ${formatUSDC(usdcBalance)})`;
     }
     return null;
-  }, [parsedTokenAmount, founder.spendCapRemaining, usdcCost, usdcBalance]);
+  }, [parsedTokenAmount, founder.tokenCapRemaining, founder.usdcCapRemaining, usdcCost, usdcBalance]);
 
   const isInputValid = parsedTokenAmount > 0n && validation === null;
   const needsApproval = usdcCost > 0n && allowance < usdcCost;
@@ -103,6 +113,9 @@ export function PurchaseForm() {
     [maxTokens],
   );
 
+  // Track the token amount at time of purchase for the toast/receipt
+  const purchasedAmountRef = useRef(0n);
+
   // Approve handler
   const handleApprove = useCallback(() => {
     if (!isInputValid) return;
@@ -115,11 +128,8 @@ export function PurchaseForm() {
     if (!isInputValid) return;
     purchasedAmountRef.current = parsedTokenAmount;
     setStep('purchasing');
-    presaleWrite.purchaseTokens(parsedTokenAmount);
-  }, [isInputValid, presaleWrite, parsedTokenAmount]);
-
-  // Track the token amount at time of purchase for the toast/receipt
-  const purchasedAmountRef = useRef(0n);
+    presaleWrite.purchaseTokens(parsedTokenAmount, founder.tierPrice);
+  }, [isInputValid, presaleWrite, parsedTokenAmount, founder.tierPrice]);
 
   // Watch for approve confirmation → advance step
   useEffect(() => {
@@ -150,9 +160,9 @@ export function PurchaseForm() {
   if (!founder.canPurchase && !founder.isLoading) {
     const reason = !founder.isWhitelisted
       ? 'You are not registered as a Genesis Founder.'
-      : !founder.sprintCompleted
+      : !founder.isQualified
         ? 'Complete the Genesis Sprint first.'
-        : founder.spendCapRemaining === 0n
+        : founder.tokenCapRemaining === 0n
           ? 'You have reached your purchase cap.'
           : 'The presale is not currently open.';
 
@@ -179,7 +189,7 @@ export function PurchaseForm() {
           usdcCost={usdcCost}
           tierName={founder.tierName}
         />
-        {founder.spendCapRemaining > 0n && (
+        {founder.tokenCapRemaining > 0n && (
           <Button variant="outline" onClick={handleNewPurchase} className="w-full">
             Make Another Purchase
           </Button>
@@ -228,7 +238,7 @@ export function PurchaseForm() {
 
           {/* Remaining cap */}
           <p className="text-xs text-muted-foreground">
-            Remaining cap: {formatACTX(founder.spendCapRemaining, 0)} ACTX
+            Remaining cap: {formatACTX(founder.tokenCapRemaining, 0)} ACTX
           </p>
         </div>
 

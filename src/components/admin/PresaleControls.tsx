@@ -94,9 +94,7 @@ export function PresaleControls({ adminWrite }: PresaleControlsProps) {
           {presale.tgeTriggered && <Badge className="bg-[var(--blessup-green)] text-white">TGE Triggered</Badge>}
           {presale.presaleClosed && !presale.tgeTriggered && <Badge variant="secondary">Closed</Badge>}
           {presale.presaleOpen && <Badge className="bg-[var(--blessup-green)] text-white">Open</Badge>}
-          {!presale.presaleOpen && !presale.presaleClosed && !presale.tgeTriggered && (
-            <Badge variant="outline">Not Started</Badge>
-          )}
+          {/* Note: contract doesn't distinguish "never opened" from "closed" — both are !presaleOpen */}
         </div>
 
         {/* Error display */}
@@ -116,9 +114,9 @@ export function PresaleControls({ adminWrite }: PresaleControlsProps) {
             onConfirm={() => {
               adminWrite.openPresale();
             }}
-            disabled={presale.presaleOpen || presale.presaleClosed || adminWrite.open.isPending || adminWrite.open.isConfirming}
+            disabled={presale.presaleOpen || presale.tgeTriggered || adminWrite.open.isPending || adminWrite.open.isConfirming}
           >
-            <Button variant="outline" className="w-full" disabled={presale.presaleOpen || presale.presaleClosed}>
+            <Button variant="outline" className="w-full" disabled={presale.presaleOpen || presale.tgeTriggered}>
               <Play className="mr-2 h-4 w-4" />
               Open Presale
             </Button>

@@ -5,9 +5,7 @@ import { useAccount, useReadContracts } from 'wagmi';
 import { parseAbi } from 'viem';
 import { PRESALE_ABI } from '@/lib/abis/ACTXPresale';
 import { getAddresses } from '@/lib/contracts';
-import { useFounderStatus } from './useFounderStatus';
 import { usePresaleFlag } from './usePresaleContract';
-import { daysSinceTGE } from '@/lib/formatting';
 import type { VestingData } from '@/types';
 
 const presaleAbi = parseAbi(PRESALE_ABI);
@@ -15,15 +13,13 @@ const presaleAbi = parseAbi(PRESALE_ABI);
 /**
  * Composite read hook for the vesting dashboard.
  *
- * Reads vesting-specific fields via multicall (getTotalPurchased, getVestedBalance,
- * hasClaimed25) and combines with existing data from useFounderStatus (lockedBalance,
- * claimableBalance) and usePresaleFlag (tgeTriggered).
+ * Reads: getPurchase(address), getClaimable(address), getLockedBalance(address),
+ * tgeTriggered, tgeTimestamp.
  *
- * All derived state (tgeAmount, percentVested, canClaim flags, etc.) is computed here.
+ * All derived state (tgeAmount, percentVested, canClaim, etc.) is computed here.
  */
 export function useVesting(): VestingData {
   const { address } = useAccount();
-  const founder = useFounderStatus();
   const { data: tgeTriggered } = usePresaleFlag('tgeTriggered');
   const presaleAddress = getAddresses().presale;
 
@@ -34,73 +30,87 @@ export function useVesting(): VestingData {
       {
         address: presaleAddress,
         abi: presaleAbi,
-        functionName: 'getTotalPurchased',
+        functionName: 'getPurchase',
         args: address ? [address] : undefined,
       },
       {
         address: presaleAddress,
         abi: presaleAbi,
-        functionName: 'getVestedBalance',
+        functionName: 'getClaimable',
         args: address ? [address] : undefined,
       },
       {
         address: presaleAddress,
         abi: presaleAbi,
-        functionName: 'hasClaimed25',
+        functionName: 'getLockedBalance',
         args: address ? [address] : undefined,
+      },
+      {
+        address: presaleAddress,
+        abi: presaleAbi,
+        functionName: 'tgeTimestamp',
       },
     ],
     query: { enabled },
   });
 
   const allSuccess = data?.every((r) => r.status === 'success') ?? false;
-  const totalPurchased = allSuccess ? (data![0].result as bigint) : 0n;
-  const vestedBalance = allSuccess ? (data![1].result as bigint) : 0n;
-  const hasClaimed25 = allSuccess ? (data![2].result as boolean) : false;
 
-  const { lockedBalance, claimableBalance } = founder;
+  // getPurchase returns (totalTokens, totalSpentUsdc, claimed)
+  const purchaseResult = allSuccess
+    ? (data![0].result as readonly [bigint, bigint, bigint])
+    : undefined;
+  const totalPurchased = purchaseResult?.[0] ?? 0n;
+  const totalSpentUsdc = purchaseResult?.[1] ?? 0n;
+  const totalClaimed = purchaseResult?.[2] ?? 0n;
+
+  const claimableBalance = allSuccess ? (data![1].result as bigint) : 0n;
+  const lockedBalance = allSuccess ? (data![2].result as bigint) : 0n;
+  const tgeTimestamp = allSuccess ? (data![3].result as bigint) : 0n;
+
   const isTgeTriggered = tgeTriggered ?? false;
 
   return useMemo(() => {
-    const tgeAmount = totalPurchased > 0n ? (totalPurchased * 25n) / 100n : 0n;
-    const linearVestTotal = totalPurchased > 0n ? (totalPurchased * 75n) / 100n : 0n;
+    const tgeAmount = totalPurchased > 0n ? (totalPurchased * 2500n) / 10000n : 0n;
+    const linearVestTotal = totalPurchased > 0n ? totalPurchased - tgeAmount : 0n;
     const dailyVestRate = totalPurchased > 0n ? linearVestTotal / 90n : 0n;
-    const currentDay = daysSinceTGE();
-    // Clamp to zero: lockedBalance + claimableBalance can momentarily exceed
-    // totalPurchased when the two independent multicalls are out of sync.
-    const rawClaimed = totalPurchased - lockedBalance - claimableBalance;
-    const totalClaimed = totalPurchased > 0n && rawClaimed > 0n ? rawClaimed : 0n;
+
+    // Compute current day from on-chain tgeTimestamp
+    const currentDay = tgeTimestamp > 0n
+      ? Math.min(90, Math.max(0, Math.floor((Date.now() / 1000 - Number(tgeTimestamp)) / 86400)))
+      : 0;
+
+    // hasClaimed25: proxy — first claim always includes TGE portion
+    const hasClaimed25 = totalClaimed > 0n;
 
     const percentVested = totalPurchased > 0n
       ? Math.min(100, Number(((totalClaimed + claimableBalance) * 10000n) / totalPurchased) / 100)
       : 0;
 
-    // Guard: only enable claims after the vesting multicall has resolved
-    const canClaimTGE = !isVestingLoading && isTgeTriggered && !hasClaimed25 && totalPurchased > 0n;
-    const canClaimVested = claimableBalance > 0n;
+    const canClaim = claimableBalance > 0n;
     const isFullyVested = lockedBalance === 0n && claimableBalance === 0n && totalPurchased > 0n;
 
     return {
       totalPurchased,
+      totalSpentUsdc,
+      totalClaimed,
       lockedBalance,
       claimableBalance,
-      vestedBalance,
       hasClaimed25,
       tgeTriggered: isTgeTriggered,
+      tgeTimestamp,
       tgeAmount,
       linearVestTotal,
       dailyVestRate,
       currentDay,
       percentVested,
-      totalClaimed,
-      canClaimTGE,
-      canClaimVested,
+      canClaim,
       isFullyVested,
-      isLoading: founder.isLoading || isVestingLoading,
+      isLoading: isVestingLoading,
       error: vestingError ?? null,
     };
   }, [
-    totalPurchased, vestedBalance, hasClaimed25, lockedBalance,
-    claimableBalance, isTgeTriggered, founder.isLoading, isVestingLoading, vestingError,
+    totalPurchased, totalSpentUsdc, totalClaimed, lockedBalance,
+    claimableBalance, tgeTimestamp, isTgeTriggered, isVestingLoading, vestingError,
   ]);
 }

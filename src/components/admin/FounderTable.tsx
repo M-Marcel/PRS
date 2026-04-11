@@ -32,10 +32,10 @@ interface FounderRow {
 }
 
 interface AdminWriteOps {
-  readonly registerFounder: (wallet: Address, tier: number) => void;
-  readonly register: { isPending: boolean; isConfirming: boolean; isConfirmed: boolean; hash: string | null };
-  readonly markSprint: (wallet: Address) => void;
-  readonly sprint: { isPending: boolean; isConfirming: boolean; isConfirmed: boolean; hash: string | null };
+  readonly qualifyAndSetTier: (wallet: Address, tier: number) => Promise<void>;
+  readonly qualify: { isPending: boolean; isConfirming: boolean; isConfirmed: boolean; hash: string | null };
+  readonly tierOp: { isPending: boolean; isConfirming: boolean; isConfirmed: boolean; hash: string | null };
+  readonly qualifyWallet: (wallet: Address) => void;
 }
 
 interface FounderTableProps {
@@ -115,44 +115,48 @@ export function FounderTable({ adminWrite }: FounderTableProps) {
     setSelectedWallets(new Set());
   }, [page, tierFilter, kycFilter, sprintFilter]);
 
-  // Refetch + audit after register confirms
+  // Refetch + audit after qualify+tier confirms (register flow)
   useEffect(() => {
-    if (adminWrite.register.isConfirmed && registerTargetRef.current && adminAddress) {
+    if (adminWrite.tierOp.isConfirmed && registerTargetRef.current && adminAddress) {
       logAdminAction({
         adminAddress,
         action: 'register_founder',
         targetAddress: registerTargetRef.current,
-        txHash: adminWrite.register.hash ?? undefined,
+        txHash: adminWrite.tierOp.hash ?? undefined,
       });
+      registerTargetRef.current = '';
       toast.success('Founder registered on-chain');
       fetchFounders();
     }
-  }, [adminWrite.register.isConfirmed, adminAddress, fetchFounders]);
+  }, [adminWrite.tierOp.isConfirmed, adminWrite.tierOp.hash, adminAddress, fetchFounders]);
 
-  // Refetch + audit after sprint confirms
+  // Refetch + audit after qualify confirms (sprint/qualify flow)
   useEffect(() => {
-    if (adminWrite.sprint.isConfirmed && sprintTargetRef.current && adminAddress) {
+    if (adminWrite.qualify.isConfirmed && sprintTargetRef.current && adminAddress) {
       logAdminAction({
         adminAddress,
         action: 'mark_sprint',
         targetAddress: sprintTargetRef.current,
-        txHash: adminWrite.sprint.hash ?? undefined,
+        txHash: adminWrite.qualify.hash ?? undefined,
       });
-      toast.success('Sprint marked on-chain');
+      sprintTargetRef.current = '';
+      toast.success('Wallet qualified on-chain');
       fetchFounders();
     }
-  }, [adminWrite.sprint.isConfirmed, adminAddress, fetchFounders]);
+  }, [adminWrite.qualify.isConfirmed, adminWrite.qualify.hash, adminAddress, fetchFounders]);
 
   const totalPages = Math.ceil(total / limit);
 
   const handleRegister = (wallet: string, tier: number) => {
     registerTargetRef.current = wallet;
-    adminWrite.registerFounder(wallet as Address, tier);
+    adminWrite.qualifyAndSetTier(wallet as Address, tier).catch(() => {
+      // Error state is captured by useAdminWrite hook
+    });
   };
 
   const handleMarkSprint = (wallet: string) => {
     sprintTargetRef.current = wallet;
-    adminWrite.markSprint(wallet as Address);
+    adminWrite.qualifyWallet(wallet as Address);
   };
 
   // --- Bulk selection helpers ---
@@ -197,43 +201,51 @@ export function FounderTable({ adminWrite }: FounderTableProps) {
     if (registerableSelected.length === 0 || !adminAddress) return;
 
     const targets = [...registerableSelected];
-    setBulkProgress({ action: 'register', total: targets.length, completed: 0, failed: 0, inProgress: true });
-
-    let completed = 0;
-    let failed = 0;
+    const wallets = targets.map((f) => f.walletAddress as Address);
+    const tiers = targets.map((f) => f.tier);
+    setBulkProgress({ action: 'register', total: 2, completed: 0, failed: 0, inProgress: true });
 
     try {
+      // Step 1: Batch qualify all wallets
+      const qualifyHash = await writeContractAsync({
+        address: presale,
+        abi: presaleAbi,
+        functionName: 'qualifyWallets',
+        args: [wallets],
+      });
+      await waitForTransactionReceipt(config, { hash: qualifyHash });
+      setBulkProgress({ action: 'register', total: 2, completed: 1, failed: 0, inProgress: true });
+
+      // Step 2: Batch set tiers
+      const tierHash = await writeContractAsync({
+        address: presale,
+        abi: presaleAbi,
+        functionName: 'setWalletTiers',
+        args: [wallets, tiers],
+      });
+      await waitForTransactionReceipt(config, { hash: tierHash });
+
       for (const founder of targets) {
-        try {
-          const hash = await writeContractAsync({
-            address: presale,
-            abi: presaleAbi,
-            functionName: 'registerFounder',
-            args: [founder.walletAddress as Address, founder.tier],
-          });
-          await waitForTransactionReceipt(config, { hash });
-          logAdminAction({
-            adminAddress,
-            action: 'register_founder',
-            targetAddress: founder.walletAddress,
-            txHash: hash,
-          });
-          completed++;
-        } catch (err: unknown) {
-          failed++;
-          const msg = err instanceof Error ? err.message : 'Unknown error';
-          const isUserRejection = msg.toLowerCase().includes('user rejected') || msg.toLowerCase().includes('user denied');
-          if (isUserRejection) {
-            toast.error('Transaction cancelled by user — stopping bulk operation');
-            break;
-          }
-          toast.warning(`Failed for ${truncateAddress(founder.walletAddress)}: ${msg.slice(0, 80)}`);
-        }
-        setBulkProgress({ action: 'register', total: targets.length, completed, failed, inProgress: true });
+        logAdminAction({
+          adminAddress,
+          action: 'register_founder',
+          targetAddress: founder.walletAddress,
+          txHash: tierHash,
+        });
       }
+
+      setBulkProgress({ action: 'register', total: 2, completed: 2, failed: 0, inProgress: false });
+      toast.success(`Registered ${targets.length} founders in 2 batch transactions`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      const isUserRejection = msg.toLowerCase().includes('user rejected') || msg.toLowerCase().includes('user denied');
+      if (isUserRejection) {
+        toast.error('Transaction cancelled by user');
+      } else {
+        toast.error(`Bulk register failed: ${msg.slice(0, 80)}`);
+      }
+      setBulkProgress({ action: 'register', total: 2, completed: 0, failed: 1, inProgress: false });
     } finally {
-      setBulkProgress({ action: 'register', total: targets.length, completed, failed, inProgress: false });
-      toast.success(`Registered: ${completed} succeeded, ${failed} failed`);
       setSelectedWallets(new Set());
       fetchFounders();
     }
@@ -243,43 +255,40 @@ export function FounderTable({ adminWrite }: FounderTableProps) {
     if (sprintableSelected.length === 0 || !adminAddress) return;
 
     const targets = [...sprintableSelected];
-    setBulkProgress({ action: 'sprint', total: targets.length, completed: 0, failed: 0, inProgress: true });
-
-    let completed = 0;
-    let failed = 0;
+    const wallets = targets.map((f) => f.walletAddress as Address);
+    setBulkProgress({ action: 'sprint', total: 1, completed: 0, failed: 0, inProgress: true });
 
     try {
+      // Single batch qualify call
+      const hash = await writeContractAsync({
+        address: presale,
+        abi: presaleAbi,
+        functionName: 'qualifyWallets',
+        args: [wallets],
+      });
+      await waitForTransactionReceipt(config, { hash });
+
       for (const founder of targets) {
-        try {
-          const hash = await writeContractAsync({
-            address: presale,
-            abi: presaleAbi,
-            functionName: 'markSprintComplete',
-            args: [founder.walletAddress as Address],
-          });
-          await waitForTransactionReceipt(config, { hash });
-          logAdminAction({
-            adminAddress,
-            action: 'mark_sprint',
-            targetAddress: founder.walletAddress,
-            txHash: hash,
-          });
-          completed++;
-        } catch (err: unknown) {
-          failed++;
-          const msg = err instanceof Error ? err.message : 'Unknown error';
-          const isUserRejection = msg.toLowerCase().includes('user rejected') || msg.toLowerCase().includes('user denied');
-          if (isUserRejection) {
-            toast.error('Transaction cancelled by user — stopping bulk operation');
-            break;
-          }
-          toast.warning(`Failed for ${truncateAddress(founder.walletAddress)}: ${msg.slice(0, 80)}`);
-        }
-        setBulkProgress({ action: 'sprint', total: targets.length, completed, failed, inProgress: true });
+        logAdminAction({
+          adminAddress,
+          action: 'mark_sprint',
+          targetAddress: founder.walletAddress,
+          txHash: hash,
+        });
       }
+
+      setBulkProgress({ action: 'sprint', total: 1, completed: 1, failed: 0, inProgress: false });
+      toast.success(`Qualified ${targets.length} wallets in 1 batch transaction`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      const isUserRejection = msg.toLowerCase().includes('user rejected') || msg.toLowerCase().includes('user denied');
+      if (isUserRejection) {
+        toast.error('Transaction cancelled by user');
+      } else {
+        toast.error(`Bulk qualify failed: ${msg.slice(0, 80)}`);
+      }
+      setBulkProgress({ action: 'sprint', total: 1, completed: 0, failed: 1, inProgress: false });
     } finally {
-      setBulkProgress({ action: 'sprint', total: targets.length, completed, failed, inProgress: false });
-      toast.success(`Mark Sprint: ${completed} succeeded, ${failed} failed`);
       setSelectedWallets(new Set());
       fetchFounders();
     }
@@ -452,7 +461,7 @@ export function FounderTable({ adminWrite }: FounderTableProps) {
                       variant="outline"
                       className="h-7 text-xs"
                       onClick={() => handleRegister(f.walletAddress, f.tier)}
-                      disabled={adminWrite.register.isPending || adminWrite.register.isConfirming}
+                      disabled={adminWrite.qualify.isPending || adminWrite.tierOp.isPending}
                     >
                       Register
                     </Button>
@@ -463,7 +472,7 @@ export function FounderTable({ adminWrite }: FounderTableProps) {
                       variant="outline"
                       className="h-7 text-xs"
                       onClick={() => handleMarkSprint(f.walletAddress)}
-                      disabled={adminWrite.sprint.isPending || adminWrite.sprint.isConfirming}
+                      disabled={adminWrite.qualify.isPending || adminWrite.qualify.isConfirming}
                     >
                       Mark Sprint
                     </Button>
@@ -478,13 +487,13 @@ export function FounderTable({ adminWrite }: FounderTableProps) {
         )}
 
         {/* TX status */}
-        {(adminWrite.register.hash || adminWrite.sprint.hash) && (
+        {(adminWrite.tierOp.hash || adminWrite.qualify.hash) && (
           <div className="mt-3">
-            {adminWrite.register.hash && (
-              <TransactionStatus hash={adminWrite.register.hash} label="Register Founder" />
+            {adminWrite.tierOp.hash && (
+              <TransactionStatus hash={adminWrite.tierOp.hash} label="Register Founder" />
             )}
-            {adminWrite.sprint.hash && (
-              <TransactionStatus hash={adminWrite.sprint.hash} label="Mark Sprint" />
+            {adminWrite.qualify.hash && (
+              <TransactionStatus hash={adminWrite.qualify.hash} label="Qualify Wallet" />
             )}
           </div>
         )}

@@ -12,8 +12,7 @@ import { WalletInfo } from '@/components/wallet/WalletInfo';
 import { TokenAmount } from '@/components/shared/TokenAmount';
 import {
   VestingChart,
-  ClaimTGEButton,
-  ClaimVestedButton,
+  ClaimButton,
   LockedBalanceCard,
   VestingSchedule,
 } from '@/components/vesting';
@@ -46,27 +45,20 @@ function DashboardInner() {
   const vestingData = useVesting();
   const claimWrite = useClaimWrite();
 
-  // Snapshot TGE amount before claim so the toast shows the correct value
-  // even if the multicall re-fetches and temporarily zeros the amount.
-  const tgeAmountRef = useRef(vestingData.tgeAmount);
+  // Snapshot claimable amount before claim so the toast shows the correct value
+  const claimAmountRef = useRef(vestingData.claimableBalance);
   useEffect(() => {
-    if (vestingData.tgeAmount > 0n) {
-      tgeAmountRef.current = vestingData.tgeAmount;
+    if (vestingData.claimableBalance > 0n) {
+      claimAmountRef.current = vestingData.claimableBalance;
     }
-  }, [vestingData.tgeAmount]);
+  }, [vestingData.claimableBalance]);
 
-  // Toast on successful claims
+  // Toast on successful claim
   useEffect(() => {
-    if (claimWrite.isTGEConfirmed) {
-      toast.success(`Successfully claimed ${formatACTX(tgeAmountRef.current, 0)} ACTX (TGE)!`);
+    if (claimWrite.isConfirmed) {
+      toast.success(`Successfully claimed ${formatACTX(claimAmountRef.current, 0)} ACTX!`);
     }
-  }, [claimWrite.isTGEConfirmed]);
-
-  useEffect(() => {
-    if (claimWrite.isVestedConfirmed) {
-      toast.success('Successfully claimed vested ACTX tokens!');
-    }
-  }, [claimWrite.isVestedConfirmed]);
+  }, [claimWrite.isConfirmed]);
 
   // Loading state
   if (vestingData.isLoading) {
@@ -134,29 +126,17 @@ function DashboardInner() {
         {/* Row 2: Vesting chart */}
         <VestingChart vestingData={vestingData} />
 
-        {/* Row 3: Claim buttons */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <ClaimTGEButton
-            tgeAmount={vestingData.tgeAmount}
-            canClaimTGE={vestingData.canClaimTGE}
-            hasClaimed25={vestingData.hasClaimed25}
-            tgeTriggered={vestingData.tgeTriggered}
-            isClaimingTGE={claimWrite.isClaimingTGE}
-            isTGEConfirming={claimWrite.isTGEConfirming}
-            isTGEConfirmed={claimWrite.isTGEConfirmed}
-            tgeHash={claimWrite.tgeHash}
-            onClaim={claimWrite.claimTGE}
-          />
-          <ClaimVestedButton
-            claimableBalance={vestingData.claimableBalance}
-            canClaimVested={vestingData.canClaimVested}
-            isClaimingVested={claimWrite.isClaimingVested}
-            isVestedConfirming={claimWrite.isVestedConfirming}
-            isVestedConfirmed={claimWrite.isVestedConfirmed}
-            vestedHash={claimWrite.vestedHash}
-            onClaim={claimWrite.claimVested}
-          />
-        </div>
+        {/* Row 3: Unified claim button */}
+        <ClaimButton
+          claimableBalance={vestingData.claimableBalance}
+          canClaim={vestingData.canClaim}
+          tgeTriggered={vestingData.tgeTriggered}
+          isClaiming={claimWrite.isClaiming}
+          isConfirming={claimWrite.isConfirming}
+          isConfirmed={claimWrite.isConfirmed}
+          claimHash={claimWrite.claimHash}
+          onClaim={claimWrite.claimTokens}
+        />
 
         {/* Claim errors */}
         {claimWrite.error && claimWrite.error !== 'Transaction cancelled' && (

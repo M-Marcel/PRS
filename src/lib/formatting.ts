@@ -16,13 +16,17 @@ export const formatUSDC = (amount: bigint): string => {
   })}`;
 };
 
-// Calculate USDC cost for a given ACTX amount and tier price
+// Calculate USDC cost for a given ACTX amount and tier price.
+// Uses CEILING division to ensure sufficient USDC for the purchase.
+// This must match the calculation in usePresaleWrite.purchaseTokens().
 export const calculateCost = (
   tokenAmount: bigint,  // 18 decimals
   pricePerToken: bigint // 6 decimals (USDC per 1 ACTX)
 ): bigint => {
-  // (tokenAmount * pricePerToken) / 10^18
-  return (tokenAmount * pricePerToken) / parseUnits('1', 18);
+  if (tokenAmount === 0n || pricePerToken === 0n) return 0n;
+  // Ceiling division: (a + b - 1) / b
+  const ONE_TOKEN = 10n ** 18n;
+  return (tokenAmount * pricePerToken + ONE_TOKEN - 1n) / ONE_TOKEN;
 };
 
 // Percentage of pool remaining

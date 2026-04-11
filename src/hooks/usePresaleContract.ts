@@ -13,8 +13,10 @@ function getPresaleAddress(): Address {
 }
 
 /**
- * Read the overall presale state in a single multicall.
- * Returns presale open/closed/tge status and token counters.
+ * Read the overall presale state via single getPresaleStats() call.
+ * Returns 8 values: poolTotal, poolRemaining, totalUsdcRaised, totalParticipants,
+ * presaleOpen, tgeTriggered, tgeTimestamp, version.
+ * Derives: totalTokensSold, presaleClosed.
  */
 export function usePresaleState(): {
   data: PresaleStats | undefined;
@@ -24,75 +26,59 @@ export function usePresaleState(): {
 } {
   const presaleAddress = getPresaleAddress();
 
-  const { data, isLoading, error, refetch } = useReadContracts({
-    contracts: [
-      {
-        address: presaleAddress,
-        abi: presaleAbi,
-        functionName: 'presaleOpen',
-      },
-      {
-        address: presaleAddress,
-        abi: presaleAbi,
-        functionName: 'presaleClosed',
-      },
-      {
-        address: presaleAddress,
-        abi: presaleAbi,
-        functionName: 'tgeTriggered',
-      },
-      {
-        address: presaleAddress,
-        abi: presaleAbi,
-        functionName: 'totalTokensSold',
-      },
-      {
-        address: presaleAddress,
-        abi: presaleAbi,
-        functionName: 'totalTokensAvailable',
-      },
-      {
-        address: presaleAddress,
-        abi: presaleAbi,
-        functionName: 'remainingTokens',
-      },
-      {
-        address: presaleAddress,
-        abi: presaleAbi,
-        functionName: 'paused',
-      },
-    ],
+  const statsResult = useReadContract({
+    address: presaleAddress,
+    abi: presaleAbi,
+    functionName: 'getPresaleStats',
   });
 
-  const presaleStats: PresaleStats | undefined = data?.every((r) => r.status === 'success')
+  const pausedResult = useReadContract({
+    address: presaleAddress,
+    abi: presaleAbi,
+    functionName: 'paused',
+  });
+
+  const stats = statsResult.data as
+    | readonly [bigint, bigint, bigint, bigint, boolean, boolean, bigint, bigint]
+    | undefined;
+
+  const presaleStats: PresaleStats | undefined = stats
     ? {
-        presaleOpen: data[0].result as boolean,
-        presaleClosed: data[1].result as boolean,
-        tgeTriggered: data[2].result as boolean,
-        totalTokensSold: data[3].result as bigint,
-        totalTokensAvailable: data[4].result as bigint,
-        remainingTokens: data[5].result as bigint,
-        paused: data[6].result as boolean,
+        poolTotal: stats[0],
+        poolRemaining: stats[1],
+        totalTokensSold: stats[0] - stats[1],
+        totalUsdcRaised: stats[2],
+        totalParticipants: stats[3],
+        presaleOpen: stats[4],
+        presaleClosed: !stats[4],
+        tgeTriggered: stats[5],
+        tgeTimestamp: stats[6],
+        version: stats[7],
+        paused: (pausedResult.data as boolean | undefined) ?? false,
       }
     : undefined;
 
   return {
     data: presaleStats,
-    isLoading,
-    error: error ?? null,
-    refetch,
+    isLoading: statsResult.isLoading || pausedResult.isLoading,
+    error: statsResult.error ?? pausedResult.error ?? null,
+    refetch: () => {
+      statsResult.refetch();
+      pausedResult.refetch();
+    },
   };
 }
 
 /**
  * Read founder-specific data from the presale contract.
- * Includes tier, sprint status, purchase data, and vesting balances.
+ * Uses: getWalletTier, isQualified, getPurchase, getClaimable, getLockedBalance.
  */
 export function useFounderContractData(walletAddress: Address | undefined): {
   tier: number;
-  sprintCompleted: boolean;
+  isQualified: boolean;
   tokensPurchased: bigint;
-  spendCapRemaining: bigint;
+  totalSpentUsdc: bigint;
+  totalClaimed: bigint;
   lockedBalance: bigint;
   claimableBalance: bigint;
   isLoading: boolean;
@@ -106,25 +92,25 @@ export function useFounderContractData(walletAddress: Address | undefined): {
       {
         address: presaleAddress,
         abi: presaleAbi,
-        functionName: 'founderTier',
+        functionName: 'getWalletTier',
         args: walletAddress ? [walletAddress] : undefined,
       },
       {
         address: presaleAddress,
         abi: presaleAbi,
-        functionName: 'hasCompletedSprint',
+        functionName: 'isQualified',
         args: walletAddress ? [walletAddress] : undefined,
       },
       {
         address: presaleAddress,
         abi: presaleAbi,
-        functionName: 'tokensPurchased',
+        functionName: 'getPurchase',
         args: walletAddress ? [walletAddress] : undefined,
       },
       {
         address: presaleAddress,
         abi: presaleAbi,
-        functionName: 'spendCapRemaining',
+        functionName: 'getClaimable',
         args: walletAddress ? [walletAddress] : undefined,
       },
       {
@@ -133,37 +119,39 @@ export function useFounderContractData(walletAddress: Address | undefined): {
         functionName: 'getLockedBalance',
         args: walletAddress ? [walletAddress] : undefined,
       },
-      {
-        address: presaleAddress,
-        abi: presaleAbi,
-        functionName: 'getClaimableBalance',
-        args: walletAddress ? [walletAddress] : undefined,
-      },
     ],
     query: { enabled },
   });
 
   const allSuccess = data?.every((r) => r.status === 'success') ?? false;
 
+  // getPurchase returns (totalTokens, totalSpentUsdc, claimed)
+  const purchaseResult = allSuccess
+    ? (data![2].result as readonly [bigint, bigint, bigint])
+    : undefined;
+
   return {
     tier: allSuccess ? Number(data![0].result) : 0,
-    sprintCompleted: allSuccess ? (data![1].result as boolean) : false,
-    tokensPurchased: allSuccess ? (data![2].result as bigint) : 0n,
-    spendCapRemaining: allSuccess ? (data![3].result as bigint) : 0n,
-    lockedBalance: allSuccess ? (data![4].result as bigint) : 0n,
-    claimableBalance: allSuccess ? (data![5].result as bigint) : 0n,
+    isQualified: allSuccess ? (data![1].result as boolean) : false,
+    tokensPurchased: purchaseResult?.[0] ?? 0n,
+    totalSpentUsdc: purchaseResult?.[1] ?? 0n,
+    totalClaimed: purchaseResult?.[2] ?? 0n,
+    lockedBalance: allSuccess ? (data![3].result as bigint) : 0n,
+    claimableBalance: allSuccess ? (data![4].result as bigint) : 0n,
     isLoading,
     error: error ?? null,
   };
 }
 
 /**
- * Read tier pricing from the presale contract.
+ * Read tier pricing from the presale contract via getTierConfig().
  */
 export function usePresalePricing(): {
   elitePrice: bigint;
+  eliteMaxSpend: bigint;
   legendPrice: bigint;
-  perWalletCap: bigint;
+  legendMaxSpend: bigint;
+  maxTokensPerFounder: bigint;
   isLoading: boolean;
 } {
   const presaleAddress = getPresaleAddress();
@@ -173,27 +161,39 @@ export function usePresalePricing(): {
       {
         address: presaleAddress,
         abi: presaleAbi,
-        functionName: 'elitePrice',
+        functionName: 'getTierConfig',
+        args: [1], // Elite
       },
       {
         address: presaleAddress,
         abi: presaleAbi,
-        functionName: 'legendPrice',
+        functionName: 'getTierConfig',
+        args: [2], // Legend
       },
       {
         address: presaleAddress,
         abi: presaleAbi,
-        functionName: 'perWalletCap',
+        functionName: 'maxTokensPerFounder',
       },
     ],
   });
 
   const allSuccess = data?.every((r) => r.status === 'success') ?? false;
 
+  // getTierConfig returns (priceUsdc, maxSpendUsdc)
+  const eliteConfig = allSuccess
+    ? (data![0].result as readonly [bigint, bigint])
+    : undefined;
+  const legendConfig = allSuccess
+    ? (data![1].result as readonly [bigint, bigint])
+    : undefined;
+
   return {
-    elitePrice: allSuccess ? (data![0].result as bigint) : 0n,
-    legendPrice: allSuccess ? (data![1].result as bigint) : 0n,
-    perWalletCap: allSuccess ? (data![2].result as bigint) : 0n,
+    elitePrice: eliteConfig?.[0] ?? 0n,
+    eliteMaxSpend: eliteConfig?.[1] ?? 0n,
+    legendPrice: legendConfig?.[0] ?? 0n,
+    legendMaxSpend: legendConfig?.[1] ?? 0n,
+    maxTokensPerFounder: allSuccess ? (data![2].result as bigint) : 0n,
     isLoading,
   };
 }
@@ -202,7 +202,7 @@ export function usePresalePricing(): {
  * Read a single presale boolean flag.
  */
 export function usePresaleFlag(
-  functionName: 'presaleOpen' | 'presaleClosed' | 'tgeTriggered',
+  functionName: 'presaleOpen' | 'tgeTriggered',
 ): { data: boolean | undefined; isLoading: boolean } {
   const presaleAddress = getPresaleAddress();
 

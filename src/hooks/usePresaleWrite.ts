@@ -8,6 +8,7 @@ import { USDC_ABI } from '@/lib/abis/USDC';
 import { PRESALE_ABI } from '@/lib/abis/ACTXPresale';
 import { getAddresses } from '@/lib/contracts';
 import { getErrorMessage } from '@/lib/validation';
+import { calculateCost } from '@/lib/formatting';
 
 const usdcAbi = parseAbi(USDC_ABI);
 const presaleAbi = parseAbi(PRESALE_ABI);
@@ -19,7 +20,7 @@ interface UsePresaleWriteReturn {
   readonly isApproveConfirmed: boolean;
   readonly approveHash: string | null;
 
-  readonly purchaseTokens: (tokenAmount: bigint) => void;
+  readonly purchaseTokens: (tokenAmount: bigint, tierPrice: bigint) => void;
   readonly isPurchasing: boolean;
   readonly isPurchaseConfirming: boolean;
   readonly isPurchaseConfirmed: boolean;
@@ -31,49 +32,52 @@ interface UsePresaleWriteReturn {
 
 /**
  * Parse contract revert errors into user-friendly messages.
+ * Maps actual ACTXPresale.sol custom errors.
  */
 function parseContractError(error: unknown): string {
   const msg = getErrorMessage(error);
   const lower = msg.toLowerCase();
 
-  // User rejected in wallet
   if (lower.includes('user rejected') || lower.includes('user denied')) {
     return 'Transaction cancelled';
   }
-
-  // Known contract revert reasons
-  if (lower.includes('presalenotopen') || lower.includes('presale not open')) {
+  if (lower.includes('notqualified')) {
+    return 'Your wallet is not qualified for the presale';
+  }
+  if (lower.includes('notierassigned')) {
+    return 'Your wallet has no tier assigned. Contact support.';
+  }
+  if (lower.includes('presalenotopen')) {
     return 'The presale is not currently open';
+  }
+  if (lower.includes('poolexhausted')) {
+    return 'All presale tokens have been claimed';
+  }
+  if (lower.includes('exceedsmaxspend')) {
+    return 'Purchase would exceed your tier spend cap';
+  }
+  if (lower.includes('exceedstokencap')) {
+    return 'Purchase would exceed your 10,000 ACTX cap';
+  }
+  if (lower.includes('maxparticipantsreached')) {
+    return 'The presale has reached its 300 founder limit';
   }
   if (lower.includes('insufficientallowance') || lower.includes('insufficient allowance')) {
     return 'USDC approval needed first';
   }
-  if (lower.includes('exceedscap') || lower.includes('exceeds cap') || lower.includes('exceed')) {
-    return 'Purchase would exceed your wallet cap';
-  }
   if (lower.includes('insufficientbalance') || lower.includes('insufficient balance')) {
     return 'Not enough USDC in your wallet';
   }
-  if (lower.includes('sprintnotcomplete') || lower.includes('sprint not complete')) {
-    return 'Genesis Sprint must be completed first';
-  }
-  if (lower.includes('notregistered') || lower.includes('not registered')) {
-    return 'Wallet is not registered as a founder';
-  }
 
-  // Fallback
   return msg;
 }
 
 /**
  * Write hook for the presale purchase flow.
  *
- * Exposes two write operations:
- * 1. approveUSDC(amount) — calls USDC.approve(presaleAddress, amount)
- * 2. purchaseTokens(tokenAmount) — calls presaleContract.purchase(tokenAmount)
- *
- * Each operation tracks its own pending/confirming/confirmed state.
- * On purchase confirmation, React Query caches are invalidated to refresh reads.
+ * CRITICAL: The contract's purchase(uint256 usdcAmount) accepts USDC amount (6 decimals).
+ * The UI lets users enter a desired ACTX token count, so this hook computes
+ * usdcCost = ceiling((tokenAmount * tierPrice) / 1e18) before calling the contract.
  */
 export function usePresaleWrite(): UsePresaleWriteReturn {
   const queryClient = useQueryClient();
@@ -137,12 +141,14 @@ export function usePresaleWrite(): UsePresaleWriteReturn {
     });
   };
 
-  const purchaseTokens = (tokenAmount: bigint) => {
+  const purchaseTokens = (tokenAmount: bigint, tierPrice: bigint) => {
+    // Use the same ceiling-division function as the UI display (calculateCost)
+    const usdcCost = calculateCost(tokenAmount, tierPrice);
     writePurchase({
       address: presale,
       abi: presaleAbi,
       functionName: 'purchase',
-      args: [tokenAmount],
+      args: [usdcCost],
     });
   };
 

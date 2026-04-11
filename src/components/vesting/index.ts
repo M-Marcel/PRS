@@ -1,5 +1,4 @@
 export { VestingChart } from './VestingChart';
-export { ClaimTGEButton } from './ClaimTGEButton';
-export { ClaimVestedButton } from './ClaimVestedButton';
+export { ClaimButton } from './ClaimButton';
 export { LockedBalanceCard } from './LockedBalanceCard';
 export { VestingSchedule } from './VestingSchedule';

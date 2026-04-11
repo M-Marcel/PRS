@@ -14,7 +14,7 @@ const presaleAbi = parseAbi(PRESALE_ABI);
 const ZERO_ADDRESS = zeroAddress;
 
 /**
- * Persist a detected Purchase event to the database.
+ * Persist a detected TokensPurchased event to the database.
  * Fire-and-forget — failures are non-fatal since the event is already
  * displayed in the UI via Zustand.
  */
@@ -41,13 +41,11 @@ interface UsePresaleEventsOptions {
 }
 
 /**
- * Watch for real-time Purchase and TGE events on the presale contract.
+ * Watch for real-time TokensPurchased and TGETriggered events on the presale contract.
  *
- * - Purchase events: added to the Zustand live feed + persisted to DB
- * - TGE events: toast notification + redirect to /dashboard
- *
- * Uses wagmi's useWatchContractEvent which polls via eth_getLogs on HTTP
- * transport (~5s interval) and auto-upgrades to eth_subscribe on WebSocket.
+ * - TokensPurchased events: added to the Zustand live feed + persisted to DB
+ *   Event args: (buyer, tier, usdcAmount, tokenAmount, poolRemaining)
+ * - TGETriggered events: toast notification + redirect to /dashboard
  */
 export function usePresaleEvents({ enabled = true }: UsePresaleEventsOptions = {}) {
   const queryClient = useQueryClient();
@@ -56,22 +54,24 @@ export function usePresaleEvents({ enabled = true }: UsePresaleEventsOptions = {
   const isDeployed = presaleAddress !== ZERO_ADDRESS;
   const shouldWatch = enabled && isDeployed;
 
-  // Watch Purchase events
+  // Watch TokensPurchased events (was 'Purchase' in old contract)
   useWatchContractEvent({
     address: presaleAddress,
     abi: presaleAbi,
-    eventName: 'Purchase',
+    eventName: 'TokensPurchased',
     enabled: shouldWatch,
     pollingInterval: 5_000,
     onLogs(logs) {
       for (const log of logs) {
         const { args } = log;
         if (!args || !('buyer' in args) || !args.buyer) continue;
-        if (!log.transactionHash) continue; // Skip pending/unconfirmed events
+        if (!log.transactionHash) continue;
+
+        // TokensPurchased(buyer, tier, usdcAmount, tokenAmount, poolRemaining)
         const buyer = args.buyer as string;
-        const tokenAmount = (args as Record<string, unknown>).tokenAmount as bigint | undefined;
-        const usdcPaid = (args as Record<string, unknown>).usdcPaid as bigint | undefined;
         const tier = (args as Record<string, unknown>).tier as number | undefined;
+        const usdcAmount = (args as Record<string, unknown>).usdcAmount as bigint | undefined;
+        const tokenAmount = (args as Record<string, unknown>).tokenAmount as bigint | undefined;
         if (tokenAmount == null) continue;
 
         const purchase: RecentPurchase = {
@@ -80,7 +80,7 @@ export function usePresaleEvents({ enabled = true }: UsePresaleEventsOptions = {
           tier: tier ?? 0,
           txHash: log.transactionHash ?? '',
           timestamp: Date.now(),
-          usdcPaid: usdcPaid ?? 0n,
+          usdcPaid: usdcAmount ?? 0n,
         };
 
         useAppStore.getState().addPurchase(purchase);
@@ -105,10 +105,9 @@ export function usePresaleEvents({ enabled = true }: UsePresaleEventsOptions = {
     enabled: shouldWatch,
     pollingInterval: 5_000,
     onLogs() {
-      toast.success('TGE has been triggered! 25% of your tokens are now claimable.', {
+      toast.success('TGE has been triggered! Your tokens are now claimable.', {
         duration: 5000,
       });
-      // Redirect after a brief delay so user can read the toast
       setTimeout(() => {
         router.push('/dashboard');
       }, 2000);

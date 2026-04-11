@@ -5,23 +5,20 @@ type ContractAddresses = {
   presale: Address;
   actxToken: Address;
   usdc: Address;
-  bsiOracle: Address;
 };
 
 const ADDRESSES: Record<number, ContractAddresses> = {
   // Base Sepolia (testnet)
   84532: {
-    presale: '0x0000000000000000000000000000000000000000' as Address, // TODO: From Eddy's deployment
-    actxToken: '0x901703625566C59EC59C81FD700f1bC59c41Fb6A' as Address,
-    usdc: '0x0000000000000000000000000000000000000000' as Address, // TODO: Base Sepolia USDC
-    bsiOracle: '0xBC450055089d285F69a853F38688B0acA1F645e6' as Address,
+    presale: '0xA5c93F78ee3eD5395d2fa92e8ce8f856F292fc9e' as Address,
+    actxToken: '0x66180Db496d3F130A655a453221482bb2bcf8d9B' as Address,
+    usdc: '0x21fF62001F5Fc428C36dbBE25F4FE82494d9FEfa' as Address, // MockUSDC
   },
   // Base Mainnet (production) — fill after mainnet deployment
   8453: {
     presale: '0x0000000000000000000000000000000000000000' as Address,
     actxToken: '0x0000000000000000000000000000000000000000' as Address,
     usdc: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' as Address, // Official Base USDC
-    bsiOracle: '0x0000000000000000000000000000000000000000' as Address,
   },
 };
 

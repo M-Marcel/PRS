@@ -108,7 +108,7 @@ function PageGuardInner({
   }
 
   // Gate 3: Sprint required but not completed
-  if (requireSprint && !founderStatus.sprintCompleted) {
+  if (requireSprint && !founderStatus.isQualified) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center px-4">
         <Card className="w-full max-w-md text-center">

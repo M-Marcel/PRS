@@ -25,7 +25,7 @@ export function useSprintStatus(walletAddress: Address | undefined): {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const { sprintCompleted: onChainCompleted } =
+  const { isQualified: onChainCompleted } =
     useFounderContractData(walletAddress);
 
   const fetchStatus = useCallback(async () => {

@@ -11,18 +11,11 @@ import { getErrorMessage } from '@/lib/validation';
 const presaleAbi = parseAbi(PRESALE_ABI);
 
 interface UseClaimWriteReturn {
-  readonly claimTGE: () => void;
-  readonly isClaimingTGE: boolean;
-  readonly isTGEConfirming: boolean;
-  readonly isTGEConfirmed: boolean;
-  readonly tgeHash: string | null;
-
-  readonly claimVested: () => void;
-  readonly isClaimingVested: boolean;
-  readonly isVestedConfirming: boolean;
-  readonly isVestedConfirmed: boolean;
-  readonly vestedHash: string | null;
-
+  readonly claimTokens: () => void;
+  readonly isClaiming: boolean;
+  readonly isConfirming: boolean;
+  readonly isConfirmed: boolean;
+  readonly claimHash: string | null;
   readonly error: string | null;
   readonly reset: () => void;
 }
@@ -37,126 +30,73 @@ function parseClaimError(error: unknown): string {
   if (lower.includes('user rejected') || lower.includes('user denied')) {
     return 'Transaction cancelled';
   }
-  if (lower.includes('tgenotriggered') || lower.includes('tge not triggered')) {
-    return 'TGE has not been triggered yet';
+  if (lower.includes('tgenottriggered')) {
+    return 'Token Generation Event has not been triggered yet';
   }
-  if (lower.includes('alreadyclaimed') || lower.includes('already claimed')) {
-    return 'You have already claimed your TGE tokens';
+  if (lower.includes('nothingtoclaim')) {
+    return 'No tokens available to claim yet';
   }
-  if (lower.includes('noclaimable') || lower.includes('no claimable') || lower.includes('nothing to claim')) {
-    return 'No tokens available to claim';
-  }
-  if (lower.includes('notokenspurchased') || lower.includes('no tokens purchased')) {
-    return 'You have not purchased any tokens';
+  if (lower.includes('notqualified')) {
+    return 'Your wallet is not qualified';
   }
 
   return msg;
 }
 
 /**
- * Write hook for vesting claim operations.
+ * Write hook for unified vesting claim.
  *
- * Exposes two write operations:
- * 1. claimTGE() — one-shot 25% TGE claim
- * 2. claimVested() — claim available linear vest tokens
- *
- * Follows the same pattern as usePresaleWrite: dual useWriteContract +
- * useWaitForTransactionReceipt pairs with cache invalidation on confirmation.
+ * The contract has a single claim() function that handles both TGE (25%)
+ * and linear vesting claims. No separate claimTGE/claimVested.
  */
 export function useClaimWrite(): UseClaimWriteReturn {
   const queryClient = useQueryClient();
   const { presale } = getAddresses();
 
-  // --- Claim TGE ---
   const {
-    writeContract: writeTGE,
-    data: tgeData,
-    isPending: isTGEPending,
-    error: tgeError,
-    reset: resetTGE,
+    writeContract: writeClaim,
+    data: claimData,
+    isPending: isClaimPending,
+    error: claimError,
+    reset: resetClaim,
   } = useWriteContract();
 
   const {
-    isLoading: isTGEConfirming,
-    isSuccess: isTGEConfirmed,
+    isLoading: isClaimConfirming,
+    isSuccess: isClaimConfirmed,
   } = useWaitForTransactionReceipt({
-    hash: tgeData,
-    query: { enabled: Boolean(tgeData) },
+    hash: claimData,
+    query: { enabled: Boolean(claimData) },
   });
 
-  // --- Claim Vested ---
-  const {
-    writeContract: writeVested,
-    data: vestedData,
-    isPending: isVestedPending,
-    error: vestedError,
-    reset: resetVested,
-  } = useWriteContract();
-
-  const {
-    isLoading: isVestedConfirming,
-    isSuccess: isVestedConfirmed,
-  } = useWaitForTransactionReceipt({
-    hash: vestedData,
-    query: { enabled: Boolean(vestedData) },
-  });
-
-  // Invalidate caches when either claim confirms
+  // Invalidate caches when claim confirms
   useEffect(() => {
-    if (isTGEConfirmed) {
+    if (isClaimConfirmed) {
       queryClient.invalidateQueries({ queryKey: ['readContracts'] });
       queryClient.invalidateQueries({ queryKey: ['readContract'] });
     }
-  }, [isTGEConfirmed, queryClient]);
+  }, [isClaimConfirmed, queryClient]);
 
-  useEffect(() => {
-    if (isVestedConfirmed) {
-      queryClient.invalidateQueries({ queryKey: ['readContracts'] });
-      queryClient.invalidateQueries({ queryKey: ['readContract'] });
-    }
-  }, [isVestedConfirmed, queryClient]);
-
-  const claimTGE = () => {
-    writeTGE({
+  const claimTokens = () => {
+    writeClaim({
       address: presale,
       abi: presaleAbi,
-      functionName: 'claimTGE',
-    });
-  };
-
-  const claimVested = () => {
-    writeVested({
-      address: presale,
-      abi: presaleAbi,
-      functionName: 'claimVested',
+      functionName: 'claim',
     });
   };
 
   const error = useMemo(() => {
-    const raw = tgeError ?? vestedError;
-    if (!raw) return null;
-    return parseClaimError(raw);
-  }, [tgeError, vestedError]);
-
-  const reset = () => {
-    resetTGE();
-    resetVested();
-  };
+    if (!claimError) return null;
+    return parseClaimError(claimError);
+  }, [claimError]);
 
   return {
-    claimTGE,
-    isClaimingTGE: isTGEPending,
-    isTGEConfirming,
-    isTGEConfirmed,
-    tgeHash: tgeData ?? null,
-
-    claimVested,
-    isClaimingVested: isVestedPending,
-    isVestedConfirming,
-    isVestedConfirmed,
-    vestedHash: vestedData ?? null,
-
+    claimTokens,
+    isClaiming: isClaimPending,
+    isConfirming: isClaimConfirming,
+    isConfirmed: isClaimConfirmed,
+    claimHash: claimData ?? null,
     error,
-    reset,
+    reset: resetClaim,
   };
 }
