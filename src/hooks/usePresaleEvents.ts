@@ -4,13 +4,15 @@ import { useWatchContractEvent } from 'wagmi';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { parseAbi, zeroAddress } from 'viem';
-import { PRESALE_ABI } from '@/lib/abis/ACTXPresale';
+import { GENESIS_PRESALE_ABI } from '@/lib/abis/GenesisPresale';
+import { PRESALE_VESTING_ABI } from '@/lib/abis/PresaleVesting';
 import { getAddresses } from '@/lib/contracts';
 import { useAppStore } from '@/store/useAppStore';
 import { toast } from 'sonner';
 import type { RecentPurchase } from '@/types';
 
-const presaleAbi = parseAbi(PRESALE_ABI);
+const genesisPresaleAbi = parseAbi(GENESIS_PRESALE_ABI);
+const presaleVestingAbi = parseAbi(PRESALE_VESTING_ABI);
 const ZERO_ADDRESS = zeroAddress;
 
 /**
@@ -50,14 +52,15 @@ interface UsePresaleEventsOptions {
 export function usePresaleEvents({ enabled = true }: UsePresaleEventsOptions = {}) {
   const queryClient = useQueryClient();
   const router = useRouter();
-  const presaleAddress = getAddresses().presale;
+  const { genesisPresale: presaleAddress, presaleVesting: vestingAddress } = getAddresses();
   const isDeployed = presaleAddress !== ZERO_ADDRESS;
+  const isVestingDeployed = vestingAddress !== ZERO_ADDRESS;
   const shouldWatch = enabled && isDeployed;
 
   // Watch TokensPurchased events (was 'Purchase' in old contract)
   useWatchContractEvent({
     address: presaleAddress,
-    abi: presaleAbi,
+    abi: genesisPresaleAbi,
     eventName: 'TokensPurchased',
     enabled: shouldWatch,
     pollingInterval: 5_000,
@@ -97,12 +100,12 @@ export function usePresaleEvents({ enabled = true }: UsePresaleEventsOptions = {
     },
   });
 
-  // Watch TGETriggered events
+  // Watch TGETriggered events on PresaleVesting contract
   useWatchContractEvent({
-    address: presaleAddress,
-    abi: presaleAbi,
+    address: vestingAddress,
+    abi: presaleVestingAbi,
     eventName: 'TGETriggered',
-    enabled: shouldWatch,
+    enabled: enabled && isVestingDeployed,
     pollingInterval: 5_000,
     onLogs() {
       toast.success('TGE has been triggered! Your tokens are now claimable.', {
@@ -111,6 +114,8 @@ export function usePresaleEvents({ enabled = true }: UsePresaleEventsOptions = {
       setTimeout(() => {
         router.push('/dashboard');
       }, 2000);
+      queryClient.invalidateQueries({ queryKey: ['readContracts'] });
+      queryClient.invalidateQueries({ queryKey: ['readContract'] });
     },
   });
 

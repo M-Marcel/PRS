@@ -5,13 +5,13 @@ import { useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { useQueryClient } from '@tanstack/react-query';
 import { parseAbi } from 'viem';
 import { USDC_ABI } from '@/lib/abis/USDC';
-import { PRESALE_ABI } from '@/lib/abis/ACTXPresale';
+import { GENESIS_PRESALE_ABI } from '@/lib/abis/GenesisPresale';
 import { getAddresses } from '@/lib/contracts';
 import { getErrorMessage } from '@/lib/validation';
 import { calculateCost } from '@/lib/formatting';
 
 const usdcAbi = parseAbi(USDC_ABI);
-const presaleAbi = parseAbi(PRESALE_ABI);
+const genesisPresaleAbi = parseAbi(GENESIS_PRESALE_ABI);
 
 interface UsePresaleWriteReturn {
   readonly approveUSDC: (amount: bigint) => void;
@@ -81,7 +81,7 @@ function parseContractError(error: unknown): string {
  */
 export function usePresaleWrite(): UsePresaleWriteReturn {
   const queryClient = useQueryClient();
-  const { usdc, presale } = getAddresses();
+  const { usdc, genesisPresale } = getAddresses();
 
   // --- Approve USDC ---
   const {
@@ -137,7 +137,7 @@ export function usePresaleWrite(): UsePresaleWriteReturn {
       address: usdc,
       abi: usdcAbi,
       functionName: 'approve',
-      args: [presale, amount],
+      args: [genesisPresale, amount],
     });
   };
 
@@ -145,8 +145,8 @@ export function usePresaleWrite(): UsePresaleWriteReturn {
     // Use the same ceiling-division function as the UI display (calculateCost)
     const usdcCost = calculateCost(tokenAmount, tierPrice);
     writePurchase({
-      address: presale,
-      abi: presaleAbi,
+      address: genesisPresale,
+      abi: genesisPresaleAbi,
       functionName: 'purchase',
       args: [usdcCost],
     });

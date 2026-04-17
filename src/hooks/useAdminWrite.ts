@@ -5,11 +5,13 @@ import { useWriteContract, useWaitForTransactionReceipt, useConfig } from 'wagmi
 import { waitForTransactionReceipt } from 'wagmi/actions';
 import { useQueryClient } from '@tanstack/react-query';
 import { type Address, parseAbi } from 'viem';
-import { PRESALE_ABI } from '@/lib/abis/ACTXPresale';
+import { GENESIS_PRESALE_ABI } from '@/lib/abis/GenesisPresale';
+import { PRESALE_VESTING_ABI } from '@/lib/abis/PresaleVesting';
 import { getAddresses } from '@/lib/contracts';
 import { getErrorMessage } from '@/lib/validation';
 
-const presaleAbi = parseAbi(PRESALE_ABI);
+const genesisPresaleAbi = parseAbi(GENESIS_PRESALE_ABI);
+const vestingAbi = parseAbi(PRESALE_VESTING_ABI);
 
 interface AdminWriteOp {
   readonly isPending: boolean;
@@ -74,6 +76,15 @@ function parseAdminError(error: unknown): string {
   if (lower.includes('paused')) {
     return 'Contract is currently paused';
   }
+  if (lower.includes('presalewindowexpired')) {
+    return 'The 7-day presale window has expired — call expirePresale() to close';
+  }
+  if (lower.includes('tierupgradewindowclosed')) {
+    return 'Tier upgrades are locked — within 24 hours of the scheduled presale open';
+  }
+  if (lower.includes('invalidscheduletime')) {
+    return 'Scheduled open time must be at least 24 hours in the future';
+  }
 
   return msg;
 }
@@ -118,7 +129,7 @@ function useAdminOp(queryClient: ReturnType<typeof useQueryClient>) {
 export function useAdminWrite(): UseAdminWriteReturn {
   const queryClient = useQueryClient();
   const config = useConfig();
-  const { presale } = getAddresses();
+  const { genesisPresale, presaleVesting } = getAddresses();
 
   const qualifyOp = useAdminOp(queryClient);
   const tierOp = useAdminOp(queryClient);
@@ -130,8 +141,8 @@ export function useAdminWrite(): UseAdminWriteReturn {
 
   const qualifyWallet = (wallet: Address) => {
     qualifyOp.writeContract({
-      address: presale,
-      abi: presaleAbi,
+      address: genesisPresale,
+      abi: genesisPresaleAbi,
       functionName: 'qualifyWallet',
       args: [wallet],
     });
@@ -139,8 +150,8 @@ export function useAdminWrite(): UseAdminWriteReturn {
 
   const setWalletTier = (wallet: Address, tier: number) => {
     tierOp.writeContract({
-      address: presale,
-      abi: presaleAbi,
+      address: genesisPresale,
+      abi: genesisPresaleAbi,
       functionName: 'setWalletTier',
       args: [wallet, tier],
     });
@@ -149,39 +160,39 @@ export function useAdminWrite(): UseAdminWriteReturn {
   // Two-step sequential: qualify then set tier (waits for on-chain confirmation)
   const qualifyAndSetTier = async (wallet: Address, tier: number) => {
     const qualifyHash = await qualifyOp.writeContractAsync({
-      address: presale,
-      abi: presaleAbi,
+      address: genesisPresale,
+      abi: genesisPresaleAbi,
       functionName: 'qualifyWallet',
       args: [wallet],
     });
     // Wait for on-chain confirmation before sending the second transaction
     await waitForTransactionReceipt(config, { hash: qualifyHash });
     tierOp.writeContract({
-      address: presale,
-      abi: presaleAbi,
+      address: genesisPresale,
+      abi: genesisPresaleAbi,
       functionName: 'setWalletTier',
       args: [wallet, tier],
     });
   };
 
   const openPresale = () => {
-    openOp.writeContract({ address: presale, abi: presaleAbi, functionName: 'openPresale' });
+    openOp.writeContract({ address: genesisPresale, abi: genesisPresaleAbi, functionName: 'openPresale' });
   };
 
   const closePresale = () => {
-    closeOp.writeContract({ address: presale, abi: presaleAbi, functionName: 'closePresale' });
+    closeOp.writeContract({ address: genesisPresale, abi: genesisPresaleAbi, functionName: 'closePresale' });
   };
 
   const triggerTGE = () => {
-    tgeOp.writeContract({ address: presale, abi: presaleAbi, functionName: 'triggerTGE' });
+    tgeOp.writeContract({ address: presaleVesting, abi: vestingAbi, functionName: 'triggerTGE' });
   };
 
   const doPause = () => {
-    pauseOperation.writeContract({ address: presale, abi: presaleAbi, functionName: 'pause' });
+    pauseOperation.writeContract({ address: genesisPresale, abi: genesisPresaleAbi, functionName: 'pause' });
   };
 
   const doUnpause = () => {
-    unpauseOperation.writeContract({ address: presale, abi: presaleAbi, functionName: 'unpause' });
+    unpauseOperation.writeContract({ address: genesisPresale, abi: genesisPresaleAbi, functionName: 'unpause' });
   };
 
   const toOp = (op: ReturnType<typeof useAdminOp>): AdminWriteOp => ({
