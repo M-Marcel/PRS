@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useAccount } from 'wagmi';
 import { usePresaleState } from '@/hooks/usePresaleContract';
+import { useVesting } from '@/hooks/useVesting';
 import { logAdminAction } from '@/lib/adminAudit';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -31,12 +32,13 @@ interface TGETriggerProps {
 export function TGETrigger({ adminWrite }: TGETriggerProps) {
   const { address: adminAddress } = useAccount();
   const { data: presale } = usePresaleState();
+  const { tgeTriggered } = useVesting();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [confirmText, setConfirmText] = useState('');
 
-  const canTrigger = presale?.presaleClosed === true && presale?.tgeTriggered === false;
+  const canTrigger = presale?.presaleClosed === true && tgeTriggered === false;
   const isProcessing = adminWrite.tge.isPending || adminWrite.tge.isConfirming;
 
   // Log audit after TGE confirms
@@ -63,7 +65,7 @@ export function TGETrigger({ adminWrite }: TGETriggerProps) {
   };
 
   // Already triggered — show success state
-  if (presale?.tgeTriggered || adminWrite.tge.isConfirmed) {
+  if (tgeTriggered || adminWrite.tge.isConfirmed) {
     return (
       <Card className="border-[var(--blessup-green)]/30">
         <CardContent className="flex items-center gap-3 py-6">

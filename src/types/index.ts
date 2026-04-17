@@ -83,8 +83,8 @@ export interface PresaleStats {
   readonly totalParticipants: bigint;
   readonly presaleOpen: boolean;
   readonly presaleClosed: boolean;
-  readonly tgeTriggered: boolean;
-  readonly tgeTimestamp: bigint;
+  readonly presaleOpenTime: bigint;
+  readonly scheduledOpenTime: bigint;
   readonly version: bigint;
   readonly paused: boolean;
 }

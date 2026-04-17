@@ -6,7 +6,7 @@ import { waitForTransactionReceipt } from 'wagmi/actions';
 import { type Address, parseAbi } from 'viem';
 import { truncateAddress } from '@/lib/formatting';
 import { logAdminAction } from '@/lib/adminAudit';
-import { PRESALE_ABI } from '@/lib/abis/ACTXPresale';
+import { GENESIS_PRESALE_ABI } from '@/lib/abis/GenesisPresale';
 import { getAddresses } from '@/lib/contracts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -16,8 +16,8 @@ import { TransactionStatus } from '@/components/shared/TransactionStatus';
 import { Loader2, ChevronLeft, ChevronRight, CheckSquare, Square, Users, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 
-const presaleAbi = parseAbi(PRESALE_ABI);
-const { presale: presaleAddress } = getAddresses();
+const genesisPresaleAbi = parseAbi(GENESIS_PRESALE_ABI);
+const { genesisPresale: presaleAddress } = getAddresses();
 
 interface FounderRow {
   readonly id: string;
@@ -209,7 +209,7 @@ export function FounderTable({ adminWrite }: FounderTableProps) {
       // Step 1: Batch qualify all wallets
       const qualifyHash = await writeContractAsync({
         address: presale,
-        abi: presaleAbi,
+        abi: genesisPresaleAbi,
         functionName: 'qualifyWallets',
         args: [wallets],
       });
@@ -219,7 +219,7 @@ export function FounderTable({ adminWrite }: FounderTableProps) {
       // Step 2: Batch set tiers
       const tierHash = await writeContractAsync({
         address: presale,
-        abi: presaleAbi,
+        abi: genesisPresaleAbi,
         functionName: 'setWalletTiers',
         args: [wallets, tiers],
       });
@@ -262,7 +262,7 @@ export function FounderTable({ adminWrite }: FounderTableProps) {
       // Single batch qualify call
       const hash = await writeContractAsync({
         address: presale,
-        abi: presaleAbi,
+        abi: genesisPresaleAbi,
         functionName: 'qualifyWallets',
         args: [wallets],
       });

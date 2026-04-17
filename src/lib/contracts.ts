@@ -2,23 +2,24 @@ import { type Address } from 'viem';
 import { TARGET_CHAIN_ID } from './chains';
 
 type ContractAddresses = {
-  presale: Address;
+  genesisPresale: Address;
+  presaleVesting:  Address;
   actxToken: Address;
   usdc: Address;
 };
 
 const ADDRESSES: Record<number, ContractAddresses> = {
-  // Base Sepolia (testnet)
   84532: {
-    presale: '0xA5c93F78ee3eD5395d2fa92e8ce8f856F292fc9e' as Address,
-    actxToken: '0x66180Db496d3F130A655a453221482bb2bcf8d9B' as Address,
-    usdc: '0x21fF62001F5Fc428C36dbBE25F4FE82494d9FEfa' as Address, // MockUSDC
+    genesisPresale: '0x4bBAFA96Fc2A29c0fC0904aE1eC3099a5Aa6cF44' as Address,
+    presaleVesting:  '0xc8a4E16bcEC023cd0941107aA392C9Cb5021e2c3' as Address,
+    actxToken: '0x3f9ccf19F1372f0859E5d3CCd9270aA5Da080C30' as Address,
+    usdc: '0x8e18720B9A8b9f86018Cd1Fd36C827D7190490C1' as Address,
   },
-  // Base Mainnet (production) — fill after mainnet deployment
   8453: {
-    presale: '0x0000000000000000000000000000000000000000' as Address,
+    genesisPresale: '0x0000000000000000000000000000000000000000' as Address,
+    presaleVesting:  '0x0000000000000000000000000000000000000000' as Address,
     actxToken: '0x0000000000000000000000000000000000000000' as Address,
-    usdc: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' as Address, // Official Base USDC
+    usdc: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' as Address,
   },
 };
 

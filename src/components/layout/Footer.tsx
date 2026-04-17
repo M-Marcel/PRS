@@ -38,8 +38,8 @@ export function Footer() {
                 address={addresses.actxToken}
               />
               <ContractLink
-                label="Presale"
-                address={addresses.presale}
+                label="Genesis Presale"
+                address={addresses.genesisPresale}
               />
             </div>
             <p className="mt-2 text-xs text-muted-foreground">

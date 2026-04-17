@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useAccount } from 'wagmi';
 import { usePresaleState } from '@/hooks/usePresaleContract';
+import { useVesting } from '@/hooks/useVesting';
 import { formatACTX, formatUSDC } from '@/lib/formatting';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -26,6 +27,7 @@ interface MetricsData {
 export function AdminMetrics() {
   const { address } = useAccount();
   const { data: presale, isLoading: isPresaleLoading } = usePresaleState();
+  const { tgeTriggered } = useVesting();
   const [metrics, setMetrics] = useState<MetricsData | null>(null);
   const [isMetricsLoading, setIsMetricsLoading] = useState(true);
   const [metricsError, setMetricsError] = useState<string | null>(null);
@@ -72,7 +74,7 @@ export function AdminMetrics() {
       {/* Presale State Banner */}
       <div className="flex items-center gap-2">
         <span className="text-sm text-muted-foreground">Presale State:</span>
-        {presale && <PresaleStateBadge presale={presale} />}
+        {presale && <PresaleStateBadge presale={presale} tgeTriggered={tgeTriggered} />}
       </div>
 
       {/* On-chain Stats */}
@@ -137,9 +139,9 @@ function MetricCard({ label, value }: { readonly label: string; readonly value: 
   );
 }
 
-function PresaleStateBadge({ presale }: { readonly presale: { presaleOpen: boolean; presaleClosed: boolean; tgeTriggered: boolean; paused: boolean } }) {
+function PresaleStateBadge({ presale, tgeTriggered }: { readonly presale: { presaleOpen: boolean; presaleClosed: boolean; paused: boolean }; readonly tgeTriggered: boolean }) {
   if (presale.paused) return <Badge variant="destructive">Paused</Badge>;
-  if (presale.tgeTriggered) return <Badge className="bg-[var(--blessup-green)] text-white">TGE Triggered</Badge>;
+  if (tgeTriggered) return <Badge className="bg-[var(--blessup-green)] text-white">TGE Triggered</Badge>;
   if (presale.presaleClosed) return <Badge variant="secondary">Closed</Badge>;
   if (presale.presaleOpen) return <Badge className="bg-[var(--blessup-green)] text-white">Open</Badge>;
   return <Badge variant="outline">Not Started</Badge>;

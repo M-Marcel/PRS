@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createPublicClient, http, parseAbi } from 'viem';
 import { baseSepolia, base } from 'viem/chains';
-import { PRESALE_ABI } from '@/lib/abis/ACTXPresale';
+import { GENESIS_PRESALE_ABI } from '@/lib/abis/GenesisPresale';
+import { PRESALE_VESTING_ABI } from '@/lib/abis/PresaleVesting';
 import { getAddresses } from '@/lib/contracts';
 import { prisma } from '@/lib/prisma';
 
@@ -16,7 +17,8 @@ function getClient() {
   });
 }
 
-const presaleAbi = parseAbi(PRESALE_ABI);
+const genesisPresaleAbi = parseAbi(GENESIS_PRESALE_ABI);
+const presaleVestingAbi = parseAbi(PRESALE_VESTING_ABI);
 
 interface DBStats {
   totalPurchases: number;
@@ -80,28 +82,30 @@ function computeTimeRemaining(presaleOpen: boolean): number | null {
 // Response is cached for 30s with stale-while-revalidate.
 export async function GET() {
   try {
-    const presaleAddress = getAddresses().presale;
+    const genesisPresaleAddress = getAddresses().genesisPresale;
+    const presaleVestingAddress = getAddresses().presaleVesting;
 
-    // Single getPresaleStats() call replaces 6 separate reads
-    const [statsResult, dbStats] = await Promise.all([
+    const [statsResult, tgeResult, dbStats] = await Promise.all([
       getClient().readContract({
-        address: presaleAddress,
-        abi: presaleAbi,
+        address: genesisPresaleAddress,
+        abi: genesisPresaleAbi,
         functionName: 'getPresaleStats',
+      }),
+      getClient().readContract({
+        address: presaleVestingAddress,
+        abi: presaleVestingAbi,
+        functionName: 'tgeTriggered',
       }),
       getDBStats(),
     ]);
 
-    // getPresaleStats returns: (poolTotal, poolRemaining, totalUsdcRaised,
-    //   totalParticipants, presaleOpen, tgeTriggered, tgeTimestamp, version)
-    const stats = statsResult as readonly [bigint, bigint, bigint, bigint, boolean, boolean, bigint, bigint];
-
-    const poolTotal = stats[0];
-    const poolRemaining = stats[1];
-    const totalUsdcRaised = stats[2];
+    const stats = statsResult as readonly [bigint, bigint, bigint, bigint, boolean, bigint, bigint, bigint];
+    const poolTotal        = stats[0];
+    const poolRemaining    = stats[1];
+    const totalUsdcRaised  = stats[2];
     const totalParticipants = stats[3];
-    const presaleOpen = stats[4];
-    const tgeTriggered = stats[5];
+    const presaleOpen      = stats[4];
+    const tgeTriggered = tgeResult as boolean;
     const totalTokensSold = poolTotal - poolRemaining;
 
     const data = {

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useAccount } from 'wagmi';
 import { usePresaleState } from '@/hooks/usePresaleContract';
+import { useVesting } from '@/hooks/useVesting';
 import { logAdminAction } from '@/lib/adminAudit';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -40,6 +41,7 @@ interface PresaleControlsProps {
 export function PresaleControls({ adminWrite }: PresaleControlsProps) {
   const { address: adminAddress } = useAccount();
   const { data: presale, isLoading } = usePresaleState();
+  const { tgeTriggered } = useVesting();
 
   // Log audit actions after TX confirms
   useEffect(() => {
@@ -91,8 +93,8 @@ export function PresaleControls({ adminWrite }: PresaleControlsProps) {
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground">Current State:</span>
           {presale.paused && <Badge variant="destructive">Paused</Badge>}
-          {presale.tgeTriggered && <Badge className="bg-[var(--blessup-green)] text-white">TGE Triggered</Badge>}
-          {presale.presaleClosed && !presale.tgeTriggered && <Badge variant="secondary">Closed</Badge>}
+          {tgeTriggered && <Badge className="bg-[var(--blessup-green)] text-white">TGE Triggered</Badge>}
+          {presale.presaleClosed && !tgeTriggered && <Badge variant="secondary">Closed</Badge>}
           {presale.presaleOpen && <Badge className="bg-[var(--blessup-green)] text-white">Open</Badge>}
           {/* Note: contract doesn't distinguish "never opened" from "closed" — both are !presaleOpen */}
         </div>
@@ -114,9 +116,9 @@ export function PresaleControls({ adminWrite }: PresaleControlsProps) {
             onConfirm={() => {
               adminWrite.openPresale();
             }}
-            disabled={presale.presaleOpen || presale.tgeTriggered || adminWrite.open.isPending || adminWrite.open.isConfirming}
+            disabled={presale.presaleOpen || tgeTriggered || adminWrite.open.isPending || adminWrite.open.isConfirming}
           >
-            <Button variant="outline" className="w-full" disabled={presale.presaleOpen || presale.tgeTriggered}>
+            <Button variant="outline" className="w-full" disabled={presale.presaleOpen || tgeTriggered}>
               <Play className="mr-2 h-4 w-4" />
               Open Presale
             </Button>

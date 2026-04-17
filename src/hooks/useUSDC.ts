@@ -40,13 +40,13 @@ export function useUSDCAllowance(walletAddress: Address | undefined): {
   isLoading: boolean;
   refetch: () => void;
 } {
-  const { usdc, presale } = getAddresses();
+  const { usdc, genesisPresale } = getAddresses();
 
   const { data, isLoading, refetch } = useReadContract({
     address: usdc,
     abi: usdcAbi,
     functionName: 'allowance',
-    args: walletAddress ? [walletAddress, presale] : undefined,
+    args: walletAddress ? [walletAddress, genesisPresale] : undefined,
     query: { enabled: Boolean(walletAddress) },
   });
 

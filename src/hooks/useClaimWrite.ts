@@ -4,11 +4,11 @@ import { useEffect, useMemo } from 'react';
 import { useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { useQueryClient } from '@tanstack/react-query';
 import { parseAbi } from 'viem';
-import { PRESALE_ABI } from '@/lib/abis/ACTXPresale';
+import { PRESALE_VESTING_ABI } from '@/lib/abis/PresaleVesting';
 import { getAddresses } from '@/lib/contracts';
 import { getErrorMessage } from '@/lib/validation';
 
-const presaleAbi = parseAbi(PRESALE_ABI);
+const vestingAbi = parseAbi(PRESALE_VESTING_ABI);
 
 interface UseClaimWriteReturn {
   readonly claimTokens: () => void;
@@ -51,7 +51,7 @@ function parseClaimError(error: unknown): string {
  */
 export function useClaimWrite(): UseClaimWriteReturn {
   const queryClient = useQueryClient();
-  const { presale } = getAddresses();
+  const { presaleVesting } = getAddresses();
 
   const {
     writeContract: writeClaim,
@@ -79,8 +79,8 @@ export function useClaimWrite(): UseClaimWriteReturn {
 
   const claimTokens = () => {
     writeClaim({
-      address: presale,
-      abi: presaleAbi,
+      address: presaleVesting,
+      abi: vestingAbi,
       functionName: 'claim',
     });
   };
