@@ -7,6 +7,7 @@ import { parseAbi } from 'viem';
 import { USDC_ABI } from '@/lib/abis/USDC';
 import { GENESIS_PRESALE_ABI } from '@/lib/abis/GenesisPresale';
 import { getAddresses } from '@/lib/contracts';
+import { TARGET_CHAIN_ID } from '@/lib/chains';
 import { getErrorMessage } from '@/lib/validation';
 import { calculateCost } from '@/lib/formatting';
 
@@ -32,7 +33,7 @@ interface UsePresaleWriteReturn {
 
 /**
  * Parse contract revert errors into user-friendly messages.
- * Maps actual ACTXPresale.sol custom errors.
+ * Maps actual GenesisPresale.sol custom errors.
  */
 function parseContractError(error: unknown): string {
   const msg = getErrorMessage(error);
@@ -61,6 +62,9 @@ function parseContractError(error: unknown): string {
   }
   if (lower.includes('maxparticipantsreached')) {
     return 'The presale has reached its 300 founder limit';
+  }
+  if (lower.includes('presalewindowexpired')) {
+    return 'The 7-day presale window has expired';
   }
   if (lower.includes('insufficientallowance') || lower.includes('insufficient allowance')) {
     return 'USDC approval needed first';
@@ -134,10 +138,12 @@ export function usePresaleWrite(): UsePresaleWriteReturn {
 
   const approveUSDC = (amount: bigint) => {
     writeApprove({
+      chainId: TARGET_CHAIN_ID,
       address: usdc,
       abi: usdcAbi,
       functionName: 'approve',
       args: [genesisPresale, amount],
+      gas: 100_000n,
     });
   };
 
@@ -145,10 +151,12 @@ export function usePresaleWrite(): UsePresaleWriteReturn {
     // Use the same ceiling-division function as the UI display (calculateCost)
     const usdcCost = calculateCost(tokenAmount, tierPrice);
     writePurchase({
+      chainId: TARGET_CHAIN_ID,
       address: genesisPresale,
       abi: genesisPresaleAbi,
       functionName: 'purchase',
       args: [usdcCost],
+      gas: 500_000n,
     });
   };
 

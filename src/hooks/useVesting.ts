@@ -5,6 +5,7 @@ import { useAccount, useReadContract, useReadContracts } from 'wagmi';
 import { parseAbi } from 'viem';
 import { PRESALE_VESTING_ABI } from '@/lib/abis/PresaleVesting';
 import { getAddresses } from '@/lib/contracts';
+import { useFounderContractData } from '@/hooks/usePresaleContract';
 import type { VestingData } from '@/types';
 
 const presaleVestingAbi = parseAbi(PRESALE_VESTING_ABI);
@@ -13,6 +14,8 @@ export function useVesting(): VestingData {
   const { address } = useAccount();
   const vestingAddress = getAddresses().presaleVesting;
   const enabled = Boolean(address);
+
+  const { totalSpentUsdc: totalSpentUsdcFromBuyerRecord } = useFounderContractData(address);
 
   const { data: tgeTriggeredRaw } = useReadContract({
     address: vestingAddress,
@@ -56,7 +59,7 @@ export function useVesting(): VestingData {
     : undefined;
   const totalPurchased = purchaseResult?.[0] ?? 0n;
   const totalClaimed   = purchaseResult?.[1] ?? 0n;
-  const totalSpentUsdc = 0n;
+  const totalSpentUsdc = totalSpentUsdcFromBuyerRecord;
 
   const claimableBalance = allSuccess ? (data![1].result as bigint) : 0n;
   const lockedBalance    = allSuccess ? (data![2].result as bigint) : 0n;

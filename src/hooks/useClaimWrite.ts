@@ -6,6 +6,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { parseAbi } from 'viem';
 import { PRESALE_VESTING_ABI } from '@/lib/abis/PresaleVesting';
 import { getAddresses } from '@/lib/contracts';
+import { TARGET_CHAIN_ID } from '@/lib/chains';
 import { getErrorMessage } from '@/lib/validation';
 
 const vestingAbi = parseAbi(PRESALE_VESTING_ABI);
@@ -79,9 +80,11 @@ export function useClaimWrite(): UseClaimWriteReturn {
 
   const claimTokens = () => {
     writeClaim({
+      chainId: TARGET_CHAIN_ID,
       address: presaleVesting,
       abi: vestingAbi,
       functionName: 'claim',
+      gas: 300_000n,
     });
   };
 

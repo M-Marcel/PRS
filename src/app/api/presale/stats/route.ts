@@ -122,6 +122,7 @@ export async function GET() {
       legendPurchases: dbStats.legendPurchases,
       averagePurchaseSize: dbStats.averagePurchaseSize,
       timeRemaining: computeTimeRemaining(presaleOpen),
+      version: stats[7].toString(),
     };
 
     return NextResponse.json(
