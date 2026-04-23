@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, type ReactNode } from 'react';
-import { useAccount, useChainId, useSwitchChain } from 'wagmi';
+import { useAccount, useSwitchChain } from 'wagmi';
 import { TARGET_CHAIN, TARGET_CHAIN_ID } from '@/lib/chains';
 import { ConnectButton } from './ConnectButton';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -39,8 +39,7 @@ export function NetworkGuard({ children }: NetworkGuardProps) {
 }
 
 function NetworkGuardInner({ children }: NetworkGuardProps) {
-  const { isConnected } = useAccount();
-  const chainId = useChainId();
+  const { isConnected, chainId } = useAccount();
   const { switchChain, isPending: isSwitching } = useSwitchChain();
 
   // Gate 1: Not connected

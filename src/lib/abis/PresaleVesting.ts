@@ -10,6 +10,8 @@ export const PRESALE_VESTING_ABI = [
   'function getVestingMultiplier(address wallet) view returns (uint256)',
   'function tgeTriggered() view returns (bool)',
   'function tgeTimestamp() view returns (uint256)',
+  'function totalAllocated() view returns (uint256)',
+  'function totalClaimed() view returns (uint256)',
   'function actxToken() view returns (address)',
   'function version() view returns (uint256)',
   'function paused() view returns (bool)',
@@ -21,11 +23,13 @@ export const PRESALE_VESTING_ABI = [
   'function unpause() external',
   'function rescueETH(address to) external',
   'function rescueToken(address token, address to, uint256 amount) external',
+  'function withdrawUnsoldTokens(address to) external',
 
   // === Events ===
   'event PurchaseRecorded(address indexed buyer, uint256 tokens, uint256 totalAllocation)',
   'event TGETriggered(uint256 timestamp)',
   'event TokensClaimed(address indexed wallet, uint256 amount, uint256 totalClaimed)',
+  'event UnsoldTokensWithdrawn(address indexed to, uint256 amount)',
   'event ContractUpgraded(address indexed newImplementation, uint256 version)',
 
   // === Errors ===
@@ -36,4 +40,5 @@ export const PRESALE_VESTING_ABI = [
   'error ZeroAmount()',
   'error ETHTransferFailed()',
   'error CannotRescueACTX()',
+  'error NothingToWithdraw()',
 ] as const;

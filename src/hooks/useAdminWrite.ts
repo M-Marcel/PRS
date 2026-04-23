@@ -8,6 +8,7 @@ import { type Address, parseAbi } from 'viem';
 import { GENESIS_PRESALE_ABI } from '@/lib/abis/GenesisPresale';
 import { PRESALE_VESTING_ABI } from '@/lib/abis/PresaleVesting';
 import { getAddresses } from '@/lib/contracts';
+import { TARGET_CHAIN_ID } from '@/lib/chains';
 import { getErrorMessage } from '@/lib/validation';
 
 const genesisPresaleAbi = parseAbi(GENESIS_PRESALE_ABI);
@@ -141,58 +142,66 @@ export function useAdminWrite(): UseAdminWriteReturn {
 
   const qualifyWallet = (wallet: Address) => {
     qualifyOp.writeContract({
+      chainId: TARGET_CHAIN_ID,
       address: genesisPresale,
       abi: genesisPresaleAbi,
       functionName: 'qualifyWallet',
       args: [wallet],
+      gas: 200_000n,
     });
   };
 
   const setWalletTier = (wallet: Address, tier: number) => {
     tierOp.writeContract({
+      chainId: TARGET_CHAIN_ID,
       address: genesisPresale,
       abi: genesisPresaleAbi,
       functionName: 'setWalletTier',
       args: [wallet, tier],
+      gas: 200_000n,
     });
   };
 
   // Two-step sequential: qualify then set tier (waits for on-chain confirmation)
   const qualifyAndSetTier = async (wallet: Address, tier: number) => {
     const qualifyHash = await qualifyOp.writeContractAsync({
+      chainId: TARGET_CHAIN_ID,
       address: genesisPresale,
       abi: genesisPresaleAbi,
       functionName: 'qualifyWallet',
       args: [wallet],
+      gas: 200_000n,
     });
     // Wait for on-chain confirmation before sending the second transaction
     await waitForTransactionReceipt(config, { hash: qualifyHash });
     tierOp.writeContract({
+      chainId: TARGET_CHAIN_ID,
       address: genesisPresale,
       abi: genesisPresaleAbi,
       functionName: 'setWalletTier',
       args: [wallet, tier],
+      gas: 200_000n,
     });
   };
 
   const openPresale = () => {
-    openOp.writeContract({ address: genesisPresale, abi: genesisPresaleAbi, functionName: 'openPresale' });
+    openOp.writeContract({ chainId: TARGET_CHAIN_ID, address: genesisPresale, abi: genesisPresaleAbi, functionName: 'openPresale', gas: 200_000n });
   };
 
   const closePresale = () => {
-    closeOp.writeContract({ address: genesisPresale, abi: genesisPresaleAbi, functionName: 'closePresale' });
+    closeOp.writeContract({ chainId: TARGET_CHAIN_ID, address: genesisPresale, abi: genesisPresaleAbi, functionName: 'closePresale', gas: 200_000n });
   };
 
   const triggerTGE = () => {
-    tgeOp.writeContract({ address: presaleVesting, abi: vestingAbi, functionName: 'triggerTGE' });
+    tgeOp.writeContract({ chainId: TARGET_CHAIN_ID, address: presaleVesting, abi: vestingAbi, functionName: 'triggerTGE', gas: 200_000n });
   };
 
   const doPause = () => {
-    pauseOperation.writeContract({ address: genesisPresale, abi: genesisPresaleAbi, functionName: 'pause' });
+    pauseOperation.writeContract({ chainId: TARGET_CHAIN_ID, address: genesisPresale, abi: genesisPresaleAbi, functionName: 'pause', gas: 200_000n });
   };
 
   const doUnpause = () => {
-    unpauseOperation.writeContract({ address: genesisPresale, abi: genesisPresaleAbi, functionName: 'unpause' });
+    unpauseOperation.writeContract({ chainId: TARGET_CHAIN_ID, address: genesisPresale, abi: genesisPresaleAbi, functionName: 'unpause', gas: 200_000n });
   };
 
   const toOp = (op: ReturnType<typeof useAdminOp>): AdminWriteOp => ({

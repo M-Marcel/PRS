@@ -32,9 +32,14 @@ export function ApproveButton({
 
   return (
     <div className="space-y-2">
-      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-        Step 1: Approve USDC
-      </p>
+      <div className="flex items-center gap-2">
+        <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${isApproveConfirmed ? 'bg-[var(--blessup-green)] text-white' : 'border border-border bg-muted text-muted-foreground'}`}>
+          {isApproveConfirmed ? '✓' : '1'}
+        </span>
+        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+          Approve USDC
+        </p>
+      </div>
 
       {isApproveConfirmed ? (
         <div className="flex items-center gap-2 text-sm text-[var(--blessup-green)]">
