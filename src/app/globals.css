@@ -129,25 +129,29 @@
   }
 }
 
-/* === BlessUP Design Tokens === */
+/* === BlessUP Design Tokens (from brand logo) === */
 :root {
-  --blessup-green: #10B981;
-  --blessup-green-dark: #059669;
-  --blessup-green-light: #34D399;
-  --blessup-gold: #F59E0B;
-  --blessup-gold-dark: #D97706;
-  --blessup-purple: #8B5CF6;
-  --blessup-gradient-start: #10B981;
-  --blessup-gradient-end: #059669;
+  --blessup-blue: #3366CC;
+  --blessup-blue-dark: #2B59C3;
+  --blessup-blue-light: #5B8DEF;
+  --blessup-green: #2ECC71;
+  --blessup-green-dark: #27AE60;
+  --blessup-green-light: #58D68D;
+  --blessup-gold: #FBBF24;
+  --blessup-gold-dark: #E5A914;
+  --blessup-gold-light: #FCD34D;
+  --blessup-purple: #7C3AED;
+  --blessup-purple-light: #A78BFA;
+  --blessup-pink: #EC4899;
 }
 
-/* BlessUP gradient utility */
+/* BlessUP gradient utility — matches logo spectrum: blue → green → gold */
 .blessup-gradient {
-  background: linear-gradient(135deg, var(--blessup-gradient-start), var(--blessup-gradient-end));
+  background: linear-gradient(135deg, var(--blessup-blue), var(--blessup-green), var(--blessup-gold));
 }
 
 .blessup-gradient-text {
-  background: linear-gradient(135deg, var(--blessup-green), var(--blessup-green-light));
+  background: linear-gradient(135deg, var(--blessup-blue), var(--blessup-green), var(--blessup-gold));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -188,4 +192,60 @@
 
 .animate-slide-in-top {
   animation: slide-in-top 0.4s ease-out;
+}
+
+/* === Entrance Animations === */
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-delay-1 { animation-delay: 80ms; }
+.animate-delay-2 { animation-delay: 160ms; }
+.animate-delay-3 { animation-delay: 240ms; }
+.animate-delay-4 { animation-delay: 320ms; }
+
+/* === Mobile Nav Slide === */
+@keyframes slide-in-down {
+  from { transform: translateY(-100%); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes slide-out-up {
+  from { transform: translateY(0); opacity: 1; }
+  to   { transform: translateY(-100%); opacity: 0; }
+}
+
+.animate-slide-in-down {
+  animation: slide-in-down 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-slide-out-up {
+  animation: slide-out-up 0.2s ease-in both;
+}
+
+/* === Reduced Motion === */
+@media (prefers-reduced-motion: reduce) {
+  .animate-pool-pulse,
+  .animate-float-up,
+  .animate-slide-in-top,
+  .animate-fade-in-up,
+  .animate-slide-in-down,
+  .animate-slide-out-up {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

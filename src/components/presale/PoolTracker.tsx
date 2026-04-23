@@ -16,9 +16,9 @@ interface PoolTrackerProps {
  * Green (>50%) → Yellow (25–50%) → Red (<25%)
  */
 function getPoolColor(remainingPercent: number): string {
-  if (remainingPercent > 50) return '[&_[data-slot=progress-indicator]]:bg-emerald-500';
-  if (remainingPercent > 25) return '[&_[data-slot=progress-indicator]]:bg-amber-500';
-  return '[&_[data-slot=progress-indicator]]:bg-red-500';
+  if (remainingPercent > 50) return '[&_[data-slot=progress-indicator]]:bg-gradient-to-r [&_[data-slot=progress-indicator]]:from-[var(--blessup-green-dark)] [&_[data-slot=progress-indicator]]:to-[var(--blessup-green-light)]';
+  if (remainingPercent > 25) return '[&_[data-slot=progress-indicator]]:bg-gradient-to-r [&_[data-slot=progress-indicator]]:from-[var(--blessup-gold-dark)] [&_[data-slot=progress-indicator]]:to-[var(--blessup-gold-light)]';
+  return '[&_[data-slot=progress-indicator]]:bg-gradient-to-r [&_[data-slot=progress-indicator]]:from-red-600 [&_[data-slot=progress-indicator]]:to-red-400';
 }
 
 /**
@@ -83,7 +83,7 @@ export function PoolTracker({ className = '' }: PoolTrackerProps) {
           className={isPulsing ? 'animate-pool-pulse' : ''}
           onAnimationEnd={handlePulseEnd}
         >
-          <Progress value={soldPercent} className={`h-3 ${colorClass}`} />
+          <Progress value={soldPercent} className={`h-4 ${colorClass} [&_[data-slot=progress-indicator]]:transition-all [&_[data-slot=progress-indicator]]:duration-700`} />
         </div>
         {/* Floating "-X,XXX ACTX" on purchase */}
         {floatAmount && (

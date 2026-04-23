@@ -1,9 +1,14 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
-import { useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  useAccount,
+  usePublicClient,
+  useWalletClient,
+  useWaitForTransactionReceipt,
+} from 'wagmi';
 import { useQueryClient } from '@tanstack/react-query';
-import { parseAbi } from 'viem';
+import { encodeFunctionData, parseAbi, type Hex } from 'viem';
 import { USDC_ABI } from '@/lib/abis/USDC';
 import { GENESIS_PRESALE_ABI } from '@/lib/abis/GenesisPresale';
 import { getAddresses } from '@/lib/contracts';
@@ -31,10 +36,6 @@ interface UsePresaleWriteReturn {
   readonly reset: () => void;
 }
 
-/**
- * Parse contract revert errors into user-friendly messages.
- * Maps actual GenesisPresale.sol custom errors.
- */
 function parseContractError(error: unknown): string {
   const msg = getErrorMessage(error);
   const lower = msg.toLowerCase();
@@ -72,56 +73,42 @@ function parseContractError(error: unknown): string {
   if (lower.includes('insufficientbalance') || lower.includes('insufficient balance')) {
     return 'Not enough USDC in your wallet';
   }
+  if (lower.includes('invalid chain id') || lower.includes('invalid chainid')) {
+    return 'Your wallet\'s Base Sepolia RPC may be misconfigured. Try removing and re-adding Base Sepolia in your wallet settings, or switch to a different RPC endpoint.';
+  }
 
   return msg;
 }
 
-/**
- * Write hook for the presale purchase flow.
- *
- * CRITICAL: The contract's purchase(uint256 usdcAmount) accepts USDC amount (6 decimals).
- * The UI lets users enter a desired ACTX token count, so this hook computes
- * usdcCost = ceiling((tokenAmount * tierPrice) / 1e18) before calling the contract.
- */
 export function usePresaleWrite(): UsePresaleWriteReturn {
   const queryClient = useQueryClient();
   const { usdc, genesisPresale } = getAddresses();
+  const { address, chainId: walletChainId } = useAccount();
+  const publicClient = usePublicClient();
+  const { data: walletClient } = useWalletClient();
 
-  // --- Approve USDC ---
-  const {
-    writeContract: writeApprove,
-    data: approveData,
-    isPending: isApprovePending,
-    error: approveError,
-    reset: resetApprove,
-  } = useWriteContract();
+  const [approveHash, setApproveHash] = useState<Hex | null>(null);
+  const [purchaseHash, setPurchaseHash] = useState<Hex | null>(null);
+  const [isApproving, setIsApproving] = useState(false);
+  const [isPurchasing, setIsPurchasing] = useState(false);
+  const [writeError, setWriteError] = useState<unknown>(null);
 
   const {
     isLoading: isApproveConfirming,
     isSuccess: isApproveConfirmed,
   } = useWaitForTransactionReceipt({
-    hash: approveData,
-    query: { enabled: Boolean(approveData) },
+    hash: approveHash ?? undefined,
+    query: { enabled: Boolean(approveHash) },
   });
-
-  // --- Purchase Tokens ---
-  const {
-    writeContract: writePurchase,
-    data: purchaseData,
-    isPending: isPurchasePending,
-    error: purchaseError,
-    reset: resetPurchase,
-  } = useWriteContract();
 
   const {
     isLoading: isPurchaseConfirming,
     isSuccess: isPurchaseConfirmed,
   } = useWaitForTransactionReceipt({
-    hash: purchaseData,
-    query: { enabled: Boolean(purchaseData) },
+    hash: purchaseHash ?? undefined,
+    query: { enabled: Boolean(purchaseHash) },
   });
 
-  // Invalidate caches when purchase is confirmed
   useEffect(() => {
     if (isPurchaseConfirmed) {
       queryClient.invalidateQueries({ queryKey: ['readContracts'] });
@@ -129,60 +116,109 @@ export function usePresaleWrite(): UsePresaleWriteReturn {
     }
   }, [isPurchaseConfirmed, queryClient]);
 
-  // Also invalidate after approve confirms so allowance reads update
   useEffect(() => {
     if (isApproveConfirmed) {
       queryClient.invalidateQueries({ queryKey: ['readContract'] });
     }
   }, [isApproveConfirmed, queryClient]);
 
-  const approveUSDC = (amount: bigint) => {
-    writeApprove({
-      chainId: TARGET_CHAIN_ID,
-      address: usdc,
-      abi: usdcAbi,
-      functionName: 'approve',
-      args: [genesisPresale, amount],
-      gas: 100_000n,
-    });
-  };
+  const sendRawTx = useCallback(
+    async (to: Hex, data: Hex, gas: bigint): Promise<Hex> => {
+      if (!walletClient || !publicClient || !address) {
+        throw new Error('Wallet not connected');
+      }
+      if (walletChainId !== TARGET_CHAIN_ID) {
+        throw new Error(
+          `Wallet is on chain ${walletChainId ?? 'unknown'}, expected Base Sepolia (${TARGET_CHAIN_ID}). Please switch networks.`,
+        );
+      }
 
-  const purchaseTokens = (tokenAmount: bigint, tierPrice: bigint) => {
-    // Use the same ceiling-division function as the UI display (calculateCost)
-    const usdcCost = calculateCost(tokenAmount, tierPrice);
-    writePurchase({
-      chainId: TARGET_CHAIN_ID,
-      address: genesisPresale,
-      abi: genesisPresaleAbi,
-      functionName: 'purchase',
-      args: [usdcCost],
-      gas: 500_000n,
-    });
-  };
+      const [nonce, fees] = await Promise.all([
+        publicClient.getTransactionCount({ address }),
+        publicClient.estimateFeesPerGas(),
+      ]);
+
+      return walletClient.sendTransaction({
+        to,
+        data,
+        gas,
+        nonce,
+        maxFeePerGas: fees.maxFeePerGas,
+        maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
+        chain: null,
+      });
+    },
+    [walletClient, publicClient, address, walletChainId],
+  );
+
+  const approveUSDC = useCallback(
+    async (amount: bigint) => {
+      setIsApproving(true);
+      setWriteError(null);
+      try {
+        const data = encodeFunctionData({
+          abi: usdcAbi,
+          functionName: 'approve',
+          args: [genesisPresale, amount],
+        });
+        const hash = await sendRawTx(usdc, data, 100_000n);
+        setApproveHash(hash);
+      } catch (err) {
+        setWriteError(err);
+      } finally {
+        setIsApproving(false);
+      }
+    },
+    [sendRawTx, usdc, genesisPresale],
+  );
+
+  const purchaseTokens = useCallback(
+    async (tokenAmount: bigint, tierPrice: bigint) => {
+      setIsPurchasing(true);
+      setWriteError(null);
+      try {
+        const usdcCost = calculateCost(tokenAmount, tierPrice);
+        const data = encodeFunctionData({
+          abi: genesisPresaleAbi,
+          functionName: 'purchase',
+          args: [usdcCost],
+        });
+        const hash = await sendRawTx(genesisPresale, data, 300_000n);
+        setPurchaseHash(hash);
+      } catch (err) {
+        setWriteError(err);
+      } finally {
+        setIsPurchasing(false);
+      }
+    },
+    [sendRawTx, genesisPresale],
+  );
 
   const error = useMemo(() => {
-    const raw = approveError ?? purchaseError;
-    if (!raw) return null;
-    return parseContractError(raw);
-  }, [approveError, purchaseError]);
+    if (!writeError) return null;
+    return parseContractError(writeError);
+  }, [writeError]);
 
-  const reset = () => {
-    resetApprove();
-    resetPurchase();
-  };
+  const reset = useCallback(() => {
+    setApproveHash(null);
+    setPurchaseHash(null);
+    setIsApproving(false);
+    setIsPurchasing(false);
+    setWriteError(null);
+  }, []);
 
   return {
     approveUSDC,
-    isApproving: isApprovePending,
+    isApproving,
     isApproveConfirming,
     isApproveConfirmed,
-    approveHash: approveData ?? null,
+    approveHash: approveHash ?? null,
 
     purchaseTokens,
-    isPurchasing: isPurchasePending,
+    isPurchasing,
     isPurchaseConfirming,
     isPurchaseConfirmed,
-    purchaseHash: purchaseData ?? null,
+    purchaseHash: purchaseHash ?? null,
 
     error,
     reset,

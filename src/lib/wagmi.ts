@@ -7,9 +7,17 @@ let _config: Config | null = null;
 export function getWagmiConfig(): Config {
   if (_config) return _config;
 
+  const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID;
+  if (!projectId || projectId === 'placeholder') {
+    console.warn(
+      '[wagmi] NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID is not set. ' +
+        'WalletConnect will not work. Get a project ID at https://cloud.walletconnect.com',
+    );
+  }
+
   _config = getDefaultConfig({
     appName: 'BlessUP Genesis Presale',
-    projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ?? 'placeholder',
+    projectId: projectId ?? 'placeholder',
     chains: [TARGET_CHAIN],
     transports: {
       [TARGET_CHAIN.id]: http(process.env.NEXT_PUBLIC_RPC_URL),

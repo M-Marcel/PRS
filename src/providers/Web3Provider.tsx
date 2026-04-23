@@ -7,24 +7,24 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { getWagmiConfig } from '@/lib/wagmi';
 import '@rainbow-me/rainbowkit/styles.css';
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      refetchInterval: 10_000,        // Poll contract reads every 10s
-      staleTime: 5_000,
-    },
-  },
-});
-
 export function Web3Provider({ children }: { children: ReactNode }) {
   const [mounted, setMounted] = useState(false);
+  const [queryClient] = useState(
+    () =>
+      new QueryClient({
+        defaultOptions: {
+          queries: {
+            refetchInterval: 10_000,
+            staleTime: 5_000,
+          },
+        },
+      }),
+  );
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  // Prevent SSR/SSG rendering of wallet-dependent components.
-  // RainbowKit requires WalletConnect projectId which is only available at runtime.
   if (!mounted) {
     return <>{children}</>;
   }
@@ -36,7 +36,7 @@ export function Web3Provider({ children }: { children: ReactNode }) {
       <QueryClientProvider client={queryClient}>
         <RainbowKitProvider
           theme={darkTheme({
-            accentColor: '#10B981',    // BlessUP green
+            accentColor: '#2ECC71',
             borderRadius: 'medium',
           })}
           modalSize="compact"

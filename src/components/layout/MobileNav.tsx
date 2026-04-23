@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useAppStore } from '@/store/useAppStore';
 import { ConnectButton } from '@/components/wallet/ConnectButton';
@@ -13,13 +13,11 @@ interface MobileNavProps {
   readonly currentPath: string;
 }
 
-/**
- * Mobile hamburger menu navigation drawer.
- * Uses Zustand store for open/close state.
- */
 export function MobileNav({ links, currentPath }: MobileNavProps) {
   const isOpen = useAppStore((s) => s.isMobileNavOpen);
   const setOpen = useAppStore((s) => s.setMobileNavOpen);
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const navRef = useRef<HTMLElement>(null);
 
   const toggle = useCallback(() => {
     setOpen(!isOpen);
@@ -27,37 +25,50 @@ export function MobileNav({ links, currentPath }: MobileNavProps) {
 
   const close = useCallback(() => {
     setOpen(false);
+    toggleRef.current?.focus();
   }, [setOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') close();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isOpen, close]);
+
+  useEffect(() => {
+    if (isOpen && navRef.current) {
+      const firstLink = navRef.current.querySelector<HTMLElement>('a, button');
+      firstLink?.focus();
+    }
+  }, [isOpen]);
 
   return (
     <div className="md:hidden">
-      {/* Toggle Button */}
       <button
+        ref={toggleRef}
         onClick={toggle}
         type="button"
-        className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-border transition-colors hover:bg-accent"
+        className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-border transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         aria-label={isOpen ? 'Close navigation' : 'Open navigation'}
+        aria-expanded={isOpen}
       >
         {isOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
       </button>
 
-      {/* Overlay */}
       {isOpen && (
         <div className="fixed inset-0 top-16 z-40">
-          {/* Backdrop */}
           <div
             className="absolute inset-0 bg-background/80 backdrop-blur-sm"
             onClick={close}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') close();
-            }}
-            role="button"
-            tabIndex={0}
-            aria-label="Close navigation"
+            aria-hidden
           />
 
-          {/* Drawer */}
-          <nav className="relative z-50 border-b border-border bg-background p-4">
+          <nav
+            ref={navRef}
+            className="animate-slide-in-down relative z-50 border-b border-border bg-background p-4"
+          >
             <div className="flex flex-col gap-1">
               {links.map((link) => (
                 <Link

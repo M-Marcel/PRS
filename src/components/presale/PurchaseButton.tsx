@@ -30,9 +30,14 @@ export function PurchaseButton({
 
   return (
     <div className="space-y-2">
-      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-        Step 2: Purchase
-      </p>
+      <div className="flex items-center gap-2">
+        <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${!disabled ? 'bg-[var(--blessup-green)] text-white' : 'border border-border bg-muted text-muted-foreground'}`}>
+          2
+        </span>
+        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+          Purchase
+        </p>
+      </div>
 
       <Button
         onClick={onPurchase}

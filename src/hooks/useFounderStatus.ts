@@ -1,6 +1,6 @@
 'use client';
 
-import { useAccount, useChainId } from 'wagmi';
+import { useAccount } from 'wagmi';
 import { useFounderContractData, usePresaleFlag, usePresalePricing } from './usePresaleContract';
 import { FounderTier } from '@/lib/constants';
 import { TARGET_CHAIN_ID } from '@/lib/chains';
@@ -20,8 +20,7 @@ const TIER_NAMES: Record<number, string> = {
  * Qualification gate uses isQualified(address) (replaces hasCompletedSprint).
  */
 export function useFounderStatus(): FounderStatus {
-  const { address, isConnected } = useAccount();
-  const chainId = useChainId();
+  const { address, isConnected, chainId } = useAccount();
   const isCorrectChain = chainId === TARGET_CHAIN_ID;
 
   const {
