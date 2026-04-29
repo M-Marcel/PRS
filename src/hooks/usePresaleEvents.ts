@@ -7,6 +7,7 @@ import { parseAbi, zeroAddress } from 'viem';
 import { GENESIS_PRESALE_ABI } from '@/lib/abis/GenesisPresale';
 import { PRESALE_VESTING_ABI } from '@/lib/abis/PresaleVesting';
 import { getAddresses } from '@/lib/contracts';
+import { apiPost } from '@/lib/api-client';
 import { useAppStore } from '@/store/useAppStore';
 import { toast } from 'sonner';
 import type { RecentPurchase } from '@/types';
@@ -21,18 +22,13 @@ const ZERO_ADDRESS = zeroAddress;
  * displayed in the UI via Zustand.
  */
 function persistEvent(purchase: RecentPurchase, blockNumber: bigint): void {
-  fetch('/api/presale/events', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      txHash: purchase.txHash,
-      buyer: purchase.buyer,
-      tokenAmount: purchase.amount.toString(),
-      usdcAmount: purchase.usdcPaid.toString(),
-      tier: purchase.tier,
-      blockNumber: blockNumber.toString(),
-      eventType: 'purchase',
-    }),
+  apiPost('/presale/events', {
+    txHash: purchase.txHash,
+    buyer: purchase.buyer,
+    tokenAmount: purchase.amount.toString(),
+    usdcAmount: purchase.usdcPaid.toString(),
+    tier: purchase.tier,
+    blockNumber: Number(blockNumber),
   }).catch(() => {
     // Non-fatal: DB logging is supplementary
   });

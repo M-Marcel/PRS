@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useAccount } from 'wagmi';
 import { usePresaleState } from '@/hooks/usePresaleContract';
 import { useVesting } from '@/hooks/useVesting';
+import { useAuth } from '@/providers/AuthProvider';
+import { apiGet, ApiError } from '@/lib/api-client';
 import { formatACTX, formatUSDC } from '@/lib/formatting';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -25,7 +26,7 @@ interface MetricsData {
  * Admin dashboard stats — on-chain presale data + DB aggregations.
  */
 export function AdminMetrics() {
-  const { address } = useAccount();
+  const { isAuthenticated } = useAuth();
   const { data: presale, isLoading: isPresaleLoading } = usePresaleState();
   const { tgeTriggered } = useVesting();
   const [metrics, setMetrics] = useState<MetricsData | null>(null);
@@ -33,23 +34,24 @@ export function AdminMetrics() {
   const [metricsError, setMetricsError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!address) return;
-    fetch('/api/admin/metrics', {
-      headers: { 'x-admin-address': address },
-    })
-      .then((res) => res.json())
+    if (!isAuthenticated) return;
+    apiGet<MetricsData>('/admin/metrics')
       .then((res) => {
-        if (res.success) {
+        if (res.success && res.data) {
           setMetrics(res.data);
         } else {
           setMetricsError(res.error ?? 'Failed to load metrics');
         }
       })
       .catch((err) => {
+        if (err instanceof ApiError && err.status === 403) {
+          setMetricsError('You don\'t have permission to access admin metrics');
+          return;
+        }
         setMetricsError(err instanceof Error ? err.message : 'Failed to load metrics');
       })
       .finally(() => setIsMetricsLoading(false));
-  }, [address]);
+  }, [isAuthenticated]);
 
   const isLoading = isPresaleLoading || isMetricsLoading;
 

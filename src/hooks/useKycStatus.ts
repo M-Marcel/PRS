@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import type { Address } from 'viem';
-import type { KycStatus, ApiResponse, KycStatusResponse } from '@/types';
+import { apiGet, apiPost, ApiError } from '@/lib/api-client';
+import type { KycStatus, KycStatusResponse, KycInitiateResponse } from '@/types';
 
 /**
  * Fetches KYC status from the backend API for a given wallet address.
@@ -28,26 +29,18 @@ export function useKycStatus(walletAddress: Address | undefined): {
     setError(null);
 
     try {
-      const response = await fetch(
-        `/api/kyc/status?wallet=${encodeURIComponent(walletAddress)}`,
-      );
+      const result = await apiGet<KycStatusResponse>('/kyc/status');
 
-      if (!response.ok) {
-        if (response.status === 404) {
-          setKycStatus('not_started');
-          return;
-        }
-        throw new Error(`KYC status fetch failed: ${response.status}`);
-      }
-
-      const body = (await response.json()) as ApiResponse<KycStatusResponse>;
-
-      if (body.success && body.data) {
-        setKycStatus(body.data.kycStatus);
+      if (result.success && result.data) {
+        setKycStatus(result.data.kycStatus);
       } else {
         setKycStatus('not_started');
       }
     } catch (err: unknown) {
+      if (err instanceof ApiError && err.status === 404) {
+        setKycStatus('not_started');
+        return;
+      }
       const message = err instanceof Error ? err.message : 'Failed to fetch KYC status';
       setError(message);
     } finally {
@@ -87,29 +80,18 @@ export function useKycInitiate(): {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const initiateKyc = useCallback(async (walletAddress: string): Promise<string | null> => {
+  const initiateKyc = useCallback(async (_walletAddress: string): Promise<string | null> => {
     setIsLoading(true);
     setError(null);
 
     try {
-      const response = await fetch('/api/kyc/initiate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ walletAddress }),
-      });
+      const result = await apiPost<KycInitiateResponse>('/kyc/initiate');
 
-      if (!response.ok) {
-        const body = (await response.json()) as ApiResponse<never>;
-        throw new Error(body.error ?? `KYC initiate failed: ${response.status}`);
+      if (result.data?.alreadyApproved) {
+        return null;
       }
 
-      const body = (await response.json()) as ApiResponse<{ inquiryUrl: string; alreadyApproved: boolean }>;
-
-      if (body.data?.alreadyApproved) {
-        return null; // Already approved, no redirect needed
-      }
-
-      return body.data?.inquiryUrl ?? null;
+      return result.data?.inquiryUrl ?? null;
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to initiate KYC';
       setError(message);

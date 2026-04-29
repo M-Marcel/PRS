@@ -6,6 +6,8 @@ import { waitForTransactionReceipt } from 'wagmi/actions';
 import { type Address, parseAbi } from 'viem';
 import { truncateAddress } from '@/lib/formatting';
 import { logAdminAction } from '@/lib/adminAudit';
+import { apiGet } from '@/lib/api-client';
+import { useAuth } from '@/providers/AuthProvider';
 import { GENESIS_PRESALE_ABI } from '@/lib/abis/GenesisPresale';
 import { getAddresses } from '@/lib/contracts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -62,6 +64,7 @@ interface BulkProgress {
  */
 export function FounderTable({ adminWrite }: FounderTableProps) {
   const { address: adminAddress } = useAccount();
+  const { isAuthenticated } = useAuth();
   const config = useConfig();
   const { writeContractAsync } = useWriteContract();
   const [founders, setFounders] = useState<readonly FounderRow[]>([]);
@@ -83,7 +86,7 @@ export function FounderTable({ adminWrite }: FounderTableProps) {
   const limit = 20;
 
   const fetchFounders = useCallback(async () => {
-    if (!adminAddress) return;
+    if (!isAuthenticated) return;
     setIsLoading(true);
     const params = new URLSearchParams({ page: String(page), limit: String(limit) });
     if (tierFilter) params.set('tier', tierFilter);
@@ -91,20 +94,19 @@ export function FounderTable({ adminWrite }: FounderTableProps) {
     if (sprintFilter) params.set('sprintCompleted', sprintFilter);
 
     try {
-      const res = await fetch(`/api/admin/founders?${params}`, {
-        headers: { 'x-admin-address': adminAddress },
-      });
-      const data = await res.json();
-      if (data.success) {
-        setFounders(data.data);
-        setTotal(data.meta.total);
+      const result = await apiGet<{ data: readonly FounderRow[]; meta: { total: number } }>(
+        `/admin/founders?${params}`,
+      );
+      if (result.success && result.data) {
+        setFounders(result.data.data);
+        setTotal(result.data.meta.total);
       }
     } catch {
       toast.error('Failed to load founders');
     } finally {
       setIsLoading(false);
     }
-  }, [page, tierFilter, kycFilter, sprintFilter, adminAddress]);
+  }, [page, tierFilter, kycFilter, sprintFilter, isAuthenticated]);
 
   useEffect(() => {
     fetchFounders();

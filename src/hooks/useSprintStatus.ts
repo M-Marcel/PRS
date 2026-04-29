@@ -3,7 +3,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { Address } from 'viem';
 import { useFounderContractData } from './usePresaleContract';
-import type { SprintStatus, ApiResponse } from '@/types';
+import { apiGet, apiPost, ApiError } from '@/lib/api-client';
+import type { SprintStatus } from '@/types';
 
 /**
  * Fetches Genesis Sprint progress from the backend API and merges
@@ -38,27 +39,21 @@ export function useSprintStatus(walletAddress: Address | undefined): {
     setError(null);
 
     try {
-      const response = await fetch(
-        `/api/sprint/status?wallet=${encodeURIComponent(walletAddress)}`,
+      const result = await apiGet<SprintStatus>(
+        `/sprint/status?wallet=${encodeURIComponent(walletAddress)}`,
       );
 
-      if (!response.ok) {
-        if (response.status === 404) {
-          setSprintStatus(null);
-          setError('Wallet not registered for presale');
-          return;
-        }
-        throw new Error(`Sprint status fetch failed: ${response.status}`);
-      }
-
-      const body = (await response.json()) as ApiResponse<SprintStatus>;
-
-      if (body.success && body.data) {
-        setSprintStatus(body.data);
+      if (result.success && result.data) {
+        setSprintStatus(result.data);
       } else {
         setSprintStatus(null);
       }
     } catch (err: unknown) {
+      if (err instanceof ApiError && err.status === 404) {
+        setSprintStatus(null);
+        setError('Wallet not registered for presale');
+        return;
+      }
       const message =
         err instanceof Error ? err.message : 'Failed to fetch sprint status';
       setError(message);
@@ -95,21 +90,10 @@ export function useSprintStatus(walletAddress: Address | undefined): {
     setError(null);
 
     try {
-      const response = await fetch('/api/sprint/complete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ walletAddress }),
-      });
+      const result = await apiPost<SprintStatus>('/sprint/complete');
 
-      const body = (await response.json()) as ApiResponse<SprintStatus>;
-
-      if (!response.ok) {
-        setError(body.error ?? `Session completion failed: ${response.status}`);
-        return false;
-      }
-
-      if (body.success && body.data) {
-        setSprintStatus(body.data);
+      if (result.success && result.data) {
+        setSprintStatus(result.data);
       }
 
       return true;
