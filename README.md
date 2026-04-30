@@ -20,8 +20,8 @@ The plan document lives at `docs/presale-frontend-plan.md` in the parent reposit
 | State (UI) | Zustand | 5.0.12 |
 | Styling | TailwindCSS 4 + shadcn/ui (base-nova style) | Tailwind 4, shadcn 4.1.2 |
 | Icons | Lucide React | 1.7.0 |
-| Database | PostgreSQL via Prisma (pg adapter) | Prisma 7.6.0 |
-| KYC Provider | Persona (third-party) | API integration |
+| Backend API | actx-cloud (NestJS) | localhost:3001 |
+| KYC Provider | Persona (via actx-cloud) | API integration |
 | Chain | Base Sepolia (testnet) / Base Mainnet (production) | Chain IDs: 84532 / 8453 |
 
 ## What Has Been Implemented
@@ -44,14 +44,8 @@ The entire foundation is in place and functional.
 - `src/lib/constants.ts` -- All presale parameters: pool size (3M ACTX), per-wallet cap (10K), tier pricing, vesting schedule, sprint requirements, `FounderTier` and `PresaleState` enums
 - `src/types/index.ts` -- Full TypeScript type definitions: `ApiResponse<T>`, `KycStatus`, `FounderStatus`, `PresaleStats`, `TransactionState`, `SprintSession`, `SprintStatus`, `NavLink`
 - `src/lib/formatting.ts` -- `formatACTX` (18 decimals), `formatUSDC` (6 decimals), `calculateCost`, `poolPercentage`, `truncateAddress`, `daysUntil`
-- `src/lib/validation.ts` -- `validateAddress` (viem `isAddress`), `isAdminWallet`, `getErrorMessage`
+- `src/lib/validation.ts` -- `getErrorMessage` utility
 - `src/lib/utils.ts` -- `cn` utility (clsx + tailwind-merge)
-
-**Database Schema**
-- `prisma/schema.prisma` -- 4 models: `Founder` (with KYC fields, sprint tracking, presale tracking, NaXum account link), `SprintSession`, `PresaleEvent`, `AdminAction`
-- `prisma.config.ts` -- Prisma config with PrismaPg adapter
-- `src/lib/prisma.ts` -- Prisma client singleton with global caching for development
-- `src/generated/prisma/` -- Generated Prisma client with typed models
 
 **Providers**
 - `src/providers/Web3Provider.tsx` -- WagmiProvider + QueryClientProvider (10s refetch, 5s stale) + RainbowKitProvider (dark theme, BlessUP green accent)
@@ -183,7 +177,7 @@ Admin page currently shows a placeholder. Needs:
 - **E2E tests** (Playwright): Happy path, wrong network, insufficient funds, presale closed scenarios
 - **Security hardening**: CSP headers, CSRF protection, webhook signature enforcement, no sensitive data in client state
 - **Performance optimization**: RSC for static content, aggressive React Query caching, contract read batching, skeleton loaders, error boundaries
-- **Deployment**: Vercel environment variables, Prisma migration, RPC endpoint (Alchemy/QuickNode), domain SSL, analytics setup
+- **Deployment**: Vercel environment variables, RPC endpoint (Alchemy/QuickNode), domain SSL, analytics setup
 
 ### Cross-Cutting Items Not Yet Addressed
 
@@ -197,8 +191,6 @@ Admin page currently shows a placeholder. Needs:
 
 ```
 presale-ui/
-  prisma/
-    schema.prisma                 # 4 models: Founder, SprintSession, PresaleEvent, AdminAction
   src/
     app/
       layout.tsx                  # Root layout with AppProvider + Toaster
@@ -210,52 +202,42 @@ presale-ui/
       admin/
         layout.tsx                # AdminShell wrapper
         page.tsx                  # Admin panel
-      api/
-        health/route.ts           # Health check (working)
-        kyc/
-          initiate/route.ts       # Start KYC with Persona (working)
-          status/route.ts         # Check KYC status (working)
-          webhook/route.ts        # Persona webhook receiver (working)
-          dev-approve/route.ts    # Dev-only auto-approve (working)
-        sprint/status/route.ts    # Sprint progress (stub)
-        presale/stats/route.ts    # Presale metrics (stub)
-        admin/
-          founders/route.ts       # Founder listing (stub)
-          whitelist/route.ts      # Founder registration (stub)
-          tge/route.ts            # TGE trigger (stub)
     components/
       layout/                     # Header, Footer, MobileNav
       wallet/                     # ConnectButton, NetworkGuard, WalletInfo
       shared/                     # PageGuard, TransactionStatus, TokenAmount, USDCAmount, Countdown
       pages/                      # SprintPageContent, PresalePageContent, DashboardPageContent
-      admin/                      # AdminShell
-      ui/                         # shadcn/ui components (alert, badge, button, card, dialog, input, label, progress, separator, sonner, tabs)
+      admin/                      # AdminShell, AdminMetrics, FounderTable, PresaleControls, TGETrigger
+      presale/                    # PoolTracker, PurchaseForm, LiveFeed
+      ui/                         # shadcn/ui components
     hooks/
+      useSiweAuth.ts              # SIWE authentication flow
       usePresaleContract.ts       # Contract read hooks (multicall)
-      useUSDC.ts                  # USDC balance + allowance
-      useACTXToken.ts             # ACTX balance + supply
-      useFounderStatus.ts         # Composite founder state
+      useSprintStatus.ts          # Sprint progress + completion
       useKycStatus.ts             # KYC polling + initiation
-      useAdmin.ts                 # Admin wallet check
+      usePresaleEvents.ts         # On-chain event listener + persistence
+      useFounderStatus.ts         # Composite founder state
+      useAdminWrite.ts            # Admin contract write operations
+      useAdmin.ts                 # Admin wallet check (client-side)
     lib/
-      abis/                       # ACTXPresale, ACTXToken, USDC ABIs
+      api-client.ts               # Centralized HTTP client (Bearer token, error handling)
+      abis/                       # ACTXPresale, ACTXToken, USDC, PresaleVesting ABIs
       chains.ts                   # Chain config
       wagmi.ts                    # wagmi config
       contracts.ts                # Address registry
       constants.ts                # Business constants + enums
       formatting.ts               # Token formatting utils
-      validation.ts               # Address validation + error utils
-      prisma.ts                   # Prisma client singleton
+      validation.ts               # Error message utility
+      adminAudit.ts               # Admin action audit logging
       utils.ts                    # cn utility
     providers/
       Web3Provider.tsx            # wagmi + RainbowKit + React Query
+      AuthProvider.tsx            # SIWE authentication context
       AppProvider.tsx             # Provider composition
     store/
       useAppStore.ts              # Zustand UI state
     types/
       index.ts                    # All TypeScript interfaces and types
-    generated/
-      prisma/                     # Generated Prisma client
 ```
 
 ## Setup and Run Instructions
@@ -263,9 +245,8 @@ presale-ui/
 ### Prerequisites
 
 - Node.js 18+
-- PostgreSQL database
+- actx-cloud backend running at `http://localhost:3001` (see `actx-cloud/` README)
 - WalletConnect Project ID (from https://cloud.walletconnect.com)
-- Optional: Persona API key for KYC (dev mode works without it)
 
 ### Installation
 
@@ -287,24 +268,21 @@ Edit `.env` with your values:
 | `NEXT_PUBLIC_CHAIN` | Yes | `sepolia` or `mainnet` |
 | `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` | Yes | WalletConnect cloud project ID |
 | `NEXT_PUBLIC_RPC_URL` | Yes | Base chain RPC URL (Alchemy recommended) |
-| `DATABASE_URL` | Yes | PostgreSQL connection string |
-| `PERSONA_API_KEY` | No | Persona KYC API key (dev mode if unset) |
-| `PERSONA_TEMPLATE_ID` | No | Persona inquiry template ID |
-| `PERSONA_WEBHOOK_SECRET` | No | HMAC secret for webhook verification |
-| `ADMIN_WALLETS` | Yes | Comma-separated admin wallet addresses (server-side) |
-| `NEXT_PUBLIC_ADMIN_WALLETS` | Yes | Same list (client-side UI gate) |
+| `NEXT_PUBLIC_API_URL` | Yes | actx-cloud backend URL (e.g. `http://localhost:3001/api/v1`) |
+| `NEXT_PUBLIC_ADMIN_WALLETS` | Yes | Comma-separated admin wallet addresses (client-side UI gate) |
 | `NEXT_PUBLIC_PRESALE_OPEN_DATE` | Yes | ISO 8601 presale start time |
 | `NEXT_PUBLIC_PRESALE_CLOSE_DATE` | Yes | ISO 8601 presale end time |
 | `NEXT_PUBLIC_DEX_LAUNCH_DATE` | Yes | ISO 8601 DEX launch date |
 
-### Database Setup
+### Run Development Server
+
+Start actx-cloud first (database, Redis, KYC, auth all run there):
 
 ```bash
-npx prisma migrate dev
-npx prisma generate
+cd ../actx-cloud && docker-compose up -d && npm run start:dev
 ```
 
-### Run Development Server
+Then start the frontend:
 
 ```bash
 npm run dev
